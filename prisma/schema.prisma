@@ -1,0 +1,292 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// 1. PENGATURAN COMPANY PROFILE & BRANDING
+// ==========================================
+model CompanyProfile {
+  id                  String   @id @default(cuid())
+  companyName         String   @default("Karya Bangun Mandiri")
+  tagline             String   @default("Spesialis Bangun Rumah, Renovasi & Kontrakan Berkualitas")
+  aboutDescription    String   @db.Text
+  logoUrl             String?  // Logo untuk Navbar Compro
+  letterheadLogoUrl   String?  // Logo Kop Surat PDF RAB & Invoice
+  faviconUrl          String?
+  whatsappNumber      String   @default("6281234567890")
+  email               String?
+  address             String?  @db.Text
+  instagramUrl        String?
+  yearsOfExperience   Int      @default(15)
+  completedProjects   Int      @default(50)
+
+  // Kustomisasi Tampilan Hero & Workflow di Halaman Depan Compro
+  heroBadge               String   @default("Spesialis Renovasi Rumah, Bangun Baru & Kontrakan")
+  heroTitle               String   @default("Wujudkan Bangunan Impian Tanpa Drama & Biaya Membengkak.")
+  heroImageUrl            String?
+  workflowSectionTitle    String   @default("Bukan Sekadar Tukang, Kami Bekerja dengan Sistem Teknik Lengkap")
+  workflowSectionSubtitle String   @default("Setiap proyek rumah maupun kontrakan direncanakan secara presisi sebelum satu bata pun dipasang di lapangan.") @db.Text
+  workflowCardsJson       String?  @db.Text
+
+  // Parameter Kalkulator Estimasi Kasar di Halaman Compro (Harga per m2)
+  priceRenovasiPerM2  Decimal  @default(3500000) @db.Decimal(15, 2)
+  priceBangunStdPerM2 Decimal  @default(4500000) @db.Decimal(15, 2)
+  priceBangunLuxPerM2 Decimal  @default(6500000) @db.Decimal(15, 2)
+  priceKontrakanPerM2 Decimal  @default(3200000) @db.Decimal(15, 2)
+
+  updatedAt           DateTime @updatedAt
+}
+
+// ==========================================
+// 2. USER ADMIN & DATA KLIEN
+// ==========================================
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(ADMIN)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+enum UserRole {
+  SUPERADMIN
+  ADMIN
+}
+
+model Client {
+  id        String    @id @default(cuid())
+  name      String
+  phone     String
+  email     String?
+  address   String?   @db.Text
+  notes     String?   @db.Text
+  projects  Project[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+// ==========================================
+// 3. PROYEK, SHOWCASE COMPRO & FILE 3D/2D
+// ==========================================
+model Project {
+  id                String        @id @default(cuid())
+  title             String
+  slug              String        @unique
+  type              ProjectType   @default(BANGUN_BARU)
+  status            ProjectStatus @default(PLANNING)
+  description       String?       @db.Text
+  location          String?
+
+  // Spesifikasi Teknis Bangunan
+  landArea          Float?        // Luas Tanah (m2)
+  buildingArea      Float?        // Luas Bangunan (m2)
+  floors            Int           @default(1)
+  unitsCount        Int           @default(1) // Jumlah Pintu (khusus proyek Kontrakan)
+
+  // Waktu & Nilai Kontrak
+  startDate         DateTime?
+  endDate           DateTime?
+  contractValue     Decimal       @default(0) @db.Decimal(15, 2)
+
+  // Fitur Client Portal (Link khusus buat klien pantau progres tanpa login ribet)
+  shareToken        String        @unique @default(cuid())
+
+  // Pengaturan Tampilan di Halaman Depan Compro
+  isPublished       Boolean       @default(false) // Tampil di Portfolio Compro?
+  isFeatured        Boolean       @default(false) // Tampil di Halaman Utama?
+  thumbnailUrl      String?
+  beforeImageUrl    String?       // Foto Sebelum Renovasi (untuk Slider Before-After)
+  afterImageUrl     String?       // Render Enscape/V-Ray atau Foto Hasil Jadi
+
+  // Relasi
+  clientId          String?
+  client            Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  media             ProjectMedia[]
+  documents         ProjectDocument[]
+  rabCategories     RabCategory[]
+  progressLogs      ProgressLog[]
+  paymentTermins    PaymentTermin[]
+  expenseLogs       ExpenseLog[]
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+enum ProjectType {
+  RENOVASI
+  BANGUN_BARU
+  KONTRAKAN
+  INTERIOR
+}
+
+enum ProjectStatus {
+  PLANNING      // Tahap Ukur, Gambar SketchUp/Revit & Susun RAB
+  ON_PROGRESS   // Sedang Dikerjakan di Lapangan
+  COMPLETED     // Selesai / Serah Terima
+  ON_HOLD       // Ditunda Sementara
+}
+
+// Galeri Visual (Render V-Ray, Enscape, Panorama 360, Foto Hasil Jadi)
+model ProjectMedia {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String?
+  caption     String?
+  fileUrl     String    // Path di Home Server (MinIO/Local) atau Cloud
+  mediaType   MediaType @default(RENDER_3D)
+  roomName    String?   // Misal: "Fasad Depan", "Ruang Tamu", "Kamar Utama"
+  isPublic    Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+}
+
+enum MediaType {
+  RENDER_3D     // Hasil Render V-Ray / Enscape
+  PANORAMA_360  // Render 360 Derajat Enscape (Interactive Viewer)
+  REAL_PHOTO    // Foto Hasil Bangunan Jadi
+  BEFORE_PHOTO  // Foto Kondisi Awal Sebelum Renovasi
+}
+
+// Manajemen File Kerja Bapak (SketchUp, Revit 2D DED, Excel RAB)
+model ProjectDocument {
+  id          String       @id @default(cuid())
+  projectId   String
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String       // Misal: "Gambar Kerja Denah & Potongan"
+  docType     DocumentType @default(REVIT_2D)
+  version     String       @default("Rev 01") // Tracking revisi gambar
+  fileUrl     String
+  fileSize    Int?         // Ukuran file dalam bytes
+  notes       String?
+  uploadedAt  DateTime     @default(now())
+}
+
+enum DocumentType {
+  SKETCHUP_3D   // File .skp
+  REVIT_2D      // File Gambar Kerja PDF / DWG hasil Revit
+  RAB_EXCEL     // File .xlsx asli bapak
+  CONTRACT_PDF  // Dokumen SPK / Kontrak Kerja
+  OTHER
+}
+
+// ==========================================
+// 4. MODUL SMART RAB, MASTER KATEGORI & HARGA SATUAN
+// ==========================================
+model MasterRabCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique // Misal: "I. PEKERJAAN PERSIAPAN"
+  sortOrder   Int      @default(0)
+  isDefault   Boolean  @default(true) // Otomatis masuk saat bikin proyek baru?
+  createdAt   DateTime @default(now())
+}
+
+model MasterItem {
+  id           String             @id @default(cuid())
+  code         String?            // Misal: "1.1.1.1" atau "PKJ-012"
+  name         String             @db.Text // Uraian Pekerjaan AHSP
+  category     MasterItemCategory @default(PEKERJAAN)
+  workGroup    String?            // Kelompok pekerjaan (misal: "1.1 PEKERJAAN PERSIAPAN")
+  unit         String             // m2, m3, m', titik, ls, bh, sak, OH
+  defaultPrice Decimal            @db.Decimal(15, 2)
+  notes        String?            @db.Text
+  rabItems     RabItem[]
+  updatedAt    DateTime           @updatedAt
+}
+
+enum MasterItemCategory {
+  PEKERJAAN // Harga borongan/analisa per item pekerjaan
+  MATERIAL  // Harga bahan bangunan (semen, pasir, besi, cat)
+  UPAH      // Upah tukang / kepala tukang / kenek per OH
+}
+
+model RabCategory {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String    // Misal: "I. PEKERJAAN PERSIAPAN", "II. PEKERJAAN STRUKTUR"
+  sortOrder   Int       @default(0)
+  items       RabItem[]
+  createdAt   DateTime  @default(now())
+}
+
+model RabItem {
+  id            String      @id @default(cuid())
+  categoryId    String
+  category      RabCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  masterItemId  String?
+  masterItem    MasterItem? @relation(fields: [masterItemId], references: [id], onDelete: SetNull)
+
+  description   String      // Uraian Pekerjaan (bisa ketik manual atau dari import Excel)
+  volume        Decimal     @default(1) @db.Decimal(12, 3)
+  unit          String      // m2, m3, ls, titik, unit
+  unitPrice     Decimal     @default(0) @db.Decimal(15, 2)
+  totalPrice    Decimal     @default(0) @db.Decimal(15, 2) // volume * unitPrice
+  notes         String?
+  sortOrder     Int         @default(0)
+}
+
+// ==========================================
+// 5. PROGRES LAPANGAN, TERMIN & CASHFLOW
+// ==========================================
+model ProgressLog {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  weekNumber  Int      // Minggu ke-1, ke-2, dst.
+  logDate     DateTime @default(now())
+  percentage  Float    // Progres kumulatif (0 - 100%)
+  summary     String   @db.Text // Laporan singkat untuk klien
+  photoUrls   String[] // Array URL foto progres lapangan
+  createdAt   DateTime @default(now())
+}
+
+model PaymentTermin {
+  id            String        @id @default(cuid())
+  projectId     String
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  terminName    String        // Misal: "DP 30%", "Termin 1 (Progres 50%)", "Retensi 5%"
+  invoiceNumber String?       @unique
+  percentage    Float?        // Persentase dari nilai kontrak
+  amount        Decimal       @db.Decimal(15, 2)
+  dueDate       DateTime?
+  status        PaymentStatus @default(UNPAID)
+  paidAt        DateTime?
+  paymentProof  String?       // URL bukti transfer
+  notes         String?
+  createdAt     DateTime      @default(now())
+}
+
+enum PaymentStatus {
+  UNPAID
+  WAITING_VERIFICATION
+  PAID
+}
+
+// Catatan Pengeluaran Riil Lapangan (Beli Material, Kasbon Tukang, Operasional)
+model ExpenseLog {
+  id             String          @id @default(cuid())
+  projectId      String
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  expenseDate    DateTime        @default(now())
+  category       ExpenseCategory @default(MATERIAL)
+  description    String          // Misal: "Beli 30 sak semen & kasbon tukang minggu 2"
+  amount         Decimal         @db.Decimal(15, 2)
+  receiptFileUrl String?         // Foto nota / struk toko bangunan
+  recordedBy     String?
+  createdAt      DateTime        @default(now())
+}
+
+enum ExpenseCategory {
+  MATERIAL      // Belanja bahan bangunan
+  UPAH_TUKANG   // Gajian / Kasbon tukang & mandor
+  SEWA_ALAT     // Sewa scaffolding, molen, stamper
+  OPERASIONAL   // Bensin, konsumsi, keamanan lingkungan
+}
