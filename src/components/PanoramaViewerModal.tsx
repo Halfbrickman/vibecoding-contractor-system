@@ -6,6 +6,7 @@ import { Compass, X } from "lucide-react";
 interface PanoramaViewerProps {
   imageUrl: string;
   title: string;
+  roomName?: string;
 }
 
 export default function PanoramaViewerModal({
