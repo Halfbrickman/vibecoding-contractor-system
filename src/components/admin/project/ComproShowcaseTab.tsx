@@ -7,15 +7,18 @@ import {
   Save,
 } from "lucide-react";
 import { toast } from "sonner";
+import { applyImageWatermark } from "@/lib/watermark";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export default function ComproShowcaseTab({
   project,
+  watermarkUrl,
   onUploadFile,
   uploading,
   onRefresh,
 }: {
   project: any;
+  watermarkUrl?: string;
   onUploadFile: (file: File, folder: string) => Promise<string>;
   uploading: boolean;
   onRefresh: () => void;
@@ -38,15 +41,22 @@ export default function ComproShowcaseTab({
   const [afterImageUrl, setAfterImageUrl] = useState(
     project.afterImageUrl || ""
   );
+  const [useWatermark, setUseWatermark] = useState(true);
   const [savedToast, setSavedToast] = useState(false);
 
   const handleUploadImage = async (
     e: React.ChangeEvent<HTMLInputElement>,
     target: "THUMB" | "BEFORE" | "AFTER"
   ) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = await onUploadFile(file, "showcase");
+    const rawFile = e.target.files?.[0];
+    if (!rawFile) return;
+
+    let fileToUpload = rawFile;
+    if (useWatermark && watermarkUrl) {
+      fileToUpload = await applyImageWatermark(rawFile, watermarkUrl);
+    }
+
+    const url = await onUploadFile(fileToUpload, "showcase");
     if (!url) return;
     if (target === "THUMB") setThumbnailUrl(url);
     if (target === "BEFORE") setBeforeImageUrl(url);
@@ -134,17 +144,31 @@ export default function ComproShowcaseTab({
             </p>
           </div>
 
-          <label className="inline-flex items-center gap-2.5 cursor-pointer bg-amber-50 border border-amber-300 px-4 py-2 rounded-xl">
-            <input
-              type="checkbox"
-              checked={isPublished}
-              onChange={(e) => setIsPublished(e.target.checked)}
-              className="w-4 h-4 accent-amber-500"
-            />
-            <span className="text-xs font-extrabold text-amber-950">
-              Tayangkan Proyek Ini di Compro Depan
-            </span>
-          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="inline-flex items-center gap-2 cursor-pointer bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-xl">
+              <input
+                type="checkbox"
+                checked={useWatermark}
+                onChange={(e) => setUseWatermark(e.target.checked)}
+                className="w-4 h-4 accent-amber-500"
+              />
+              <span className="text-xs font-bold text-slate-700">
+                Watermark Otomatis (Kanan Atas)
+              </span>
+            </label>
+
+            <label className="inline-flex items-center gap-2.5 cursor-pointer bg-amber-50 border border-amber-300 px-4 py-2 rounded-xl">
+              <input
+                type="checkbox"
+                checked={isPublished}
+                onChange={(e) => setIsPublished(e.target.checked)}
+                className="w-4 h-4 accent-amber-500"
+              />
+              <span className="text-xs font-extrabold text-amber-950">
+                Tayangkan Proyek Ini di Compro Depan
+              </span>
+            </label>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

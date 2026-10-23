@@ -92,6 +92,7 @@ export const terminCreateSchema = z.object({
   percentage: z.coerce.number().min(0).max(100).optional().nullable(),
   amount: z.coerce.number().positive("Nominal tagihan harus lebih dari 0"),
   status: z.enum(["UNPAID", "WAITING_VERIFICATION", "PAID"]).default("UNPAID"),
+  paymentProof: z.string().optional().nullable(),
 });
 
 // 6. Validasi Pengaturan Compro
@@ -101,6 +102,8 @@ export const settingsUpdateSchema = z.object({
   aboutDescription: z.string().min(5),
   logoUrl: z.string().optional().nullable(),
   letterheadLogoUrl: z.string().optional().nullable(),
+  faviconUrl: z.string().optional().nullable(),
+  watermarkLogoUrl: z.string().optional().nullable(),
   whatsappNumber: z.string().min(8, "Nomor WhatsApp tidak valid"),
   email: z.string().optional().nullable(),
   address: z.string().optional().nullable(),
@@ -126,6 +129,7 @@ export const ALLOWED_EXTENSIONS = [
   ".webp",
   ".gif",
   ".svg",
+  ".ico",
   ".pdf",
   ".dwg",
   ".dxf",

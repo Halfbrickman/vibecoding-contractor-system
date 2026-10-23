@@ -18,6 +18,7 @@ model CompanyProfile {
   logoUrl             String?  // Logo untuk Navbar Compro
   letterheadLogoUrl   String?  // Logo Kop Surat PDF RAB & Invoice
   faviconUrl          String?
+  watermarkLogoUrl    String?  // Gambar khusus Watermark Foto Proyek
   whatsappNumber      String   @default("6281234567890")
   email               String?
   address             String?  @db.Text

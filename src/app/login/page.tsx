@@ -63,7 +63,7 @@ export default function LoginPage() {
             <img
               src={logoUrl}
               alt={companyName}
-              className="w-12 h-12 rounded-2xl object-contain bg-white p-1 shadow-lg shrink-0"
+              className="w-14 h-14 object-contain shrink-0"
             />
           ) : (
             <div className="w-12 h-12 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center shadow-lg shrink-0">

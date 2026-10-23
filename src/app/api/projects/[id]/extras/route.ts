@@ -102,9 +102,75 @@ export async function POST(
           amount: parsed.data.amount,
           status: parsed.data.status,
           paidAt: parsed.data.status === "PAID" ? new Date() : null,
+          paymentProof: parsed.data.paymentProof || null,
         },
       });
       return NextResponse.json(termin);
+    }
+
+    if (body.action === "UPDATE_EXPENSE") {
+      const parsed = expenseCreateSchema.safeParse(body);
+      if (!parsed.success || !body.expenseId) {
+        return NextResponse.json(
+          { error: parsed.error?.issues[0]?.message || "Data pengeluaran tidak valid" },
+          { status: 400 }
+        );
+      }
+
+      const updated = await prisma.expenseLog.update({
+        where: { id: body.expenseId },
+        data: {
+          category: parsed.data.category,
+          description: parsed.data.description,
+          amount: parsed.data.amount,
+          receiptFileUrl: parsed.data.receiptFileUrl || null,
+        },
+      });
+      return NextResponse.json(updated);
+    }
+
+    if (body.action === "UPDATE_TERMIN") {
+      const parsed = terminCreateSchema.safeParse(body);
+      if (!parsed.success || !body.terminId) {
+        return NextResponse.json(
+          { error: parsed.error?.issues[0]?.message || "Data termin tidak valid" },
+          { status: 400 }
+        );
+      }
+
+      const updated = await prisma.paymentTermin.update({
+        where: { id: body.terminId },
+        data: {
+          terminName: parsed.data.terminName,
+          invoiceNumber: parsed.data.invoiceNumber || null,
+          amount: parsed.data.amount,
+          status: parsed.data.status,
+          paidAt: parsed.data.status === "PAID" ? new Date() : null,
+          paymentProof: parsed.data.paymentProof || null,
+        },
+      });
+      return NextResponse.json(updated);
+    }
+
+    if (body.action === "UPDATE_PROGRESS") {
+      const parsed = progressCreateSchema.safeParse(body);
+      if (!parsed.success || !body.progressId) {
+        return NextResponse.json(
+          { error: parsed.error?.issues[0]?.message || "Data progres tidak valid" },
+          { status: 400 }
+        );
+      }
+
+      const updated = await prisma.progressLog.update({
+        where: { id: body.progressId },
+        data: {
+          weekNumber: parsed.data.weekNumber,
+          percentage: parsed.data.percentage,
+          summary: parsed.data.summary,
+          photoUrls: parsed.data.photoUrl ? [parsed.data.photoUrl] : [],
+        },
+      });
+      return NextResponse.json(updated);
     }
 
     if (body.action === "TOGGLE_TERMIN_STATUS") {
@@ -169,6 +235,8 @@ export async function DELETE(req: NextRequest) {
     await prisma.expenseLog.delete({ where: { id } });
   } else if (target === "termin") {
     await prisma.paymentTermin.delete({ where: { id } });
+  } else if (target === "progress") {
+    await prisma.progressLog.delete({ where: { id } });
   }
 
   return NextResponse.json({ success: true });

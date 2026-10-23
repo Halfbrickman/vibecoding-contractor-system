@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: contractor_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kontraktor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-neki707211}
+      POSTGRES_DB: ${POSTGRES_DB:-contractor_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kontraktor} -d ${POSTGRES_DB:-contractor_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: contractor_webapp
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-kontraktor}:${POSTGRES_PASSWORD:-neki707211}@db:5432/${POSTGRES_DB:-contractor_db}?schema=public"
+      SESSION_SECRET: ${SESSION_SECRET:-rahasia-super-aman-sistem-kontraktor-bapak-2026}
+      LOCAL_UPLOAD_DIR: "./public/uploads"
+      NEXT_PUBLIC_STORAGE_BASE_URL: "/uploads"
+    volumes:
+      - ./public/uploads:/app/public/uploads
+      - ./doc:/app/doc
+
+volumes:
+  pgdata:

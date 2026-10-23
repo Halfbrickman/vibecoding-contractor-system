@@ -243,6 +243,9 @@ export default function ProjectDetailClient({
       {activeTab === "MEDIA_3D" && (
         <Media3DTab
           project={project}
+          watermarkUrl={
+            companyProfile?.watermarkLogoUrl || companyProfile?.logoUrl || ""
+          }
           onUploadFile={uploadFileToServer}
           uploading={uploading}
           onRefresh={() => router.refresh()}
@@ -262,6 +265,8 @@ export default function ProjectDetailClient({
         <CashflowTerminTab
           project={project}
           totalRab={totalRab}
+          onUploadFile={uploadFileToServer}
+          uploading={uploading}
           onRefresh={() => router.refresh()}
         />
       )}
@@ -269,6 +274,9 @@ export default function ProjectDetailClient({
       {activeTab === "COMPRO" && (
         <ComproShowcaseTab
           project={project}
+          watermarkUrl={
+            companyProfile?.watermarkLogoUrl || companyProfile?.logoUrl || ""
+          }
           onUploadFile={uploadFileToServer}
           uploading={uploading}
           onRefresh={() => router.refresh()}

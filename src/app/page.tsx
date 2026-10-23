@@ -93,24 +93,24 @@ export default async function HomePage() {
       {/* Navbar */}
       <header className="sticky top-0 z-40 bg-slate-950/95 backdrop-blur border-b border-slate-800 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3.5">
             {profile?.logoUrl ? (
               <img
                 src={profile.logoUrl}
                 alt={companyName}
-                className="h-11 w-11 rounded-xl object-contain bg-white p-1"
+                className="h-14 w-auto max-w-[180px] object-contain shrink-0"
               />
             ) : (
-              <div className="h-11 w-11 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-extrabold text-xl shadow">
+              <div className="h-12 w-12 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-extrabold text-xl shadow shrink-0">
                 <HardHat className="w-6 h-6" />
               </div>
             )}
             <div>
-              <span className="font-extrabold text-lg tracking-tight block leading-none">
+              <span className="font-extrabold text-lg sm:text-xl tracking-tight block leading-tight">
                 {companyName}
               </span>
-              <span className="text-xs text-amber-400 font-medium">
-                Design & Build Contractor
+              <span className="text-xs text-amber-400 font-medium block mt-0.5">
+                {tagline}
               </span>
             </div>
           </div>

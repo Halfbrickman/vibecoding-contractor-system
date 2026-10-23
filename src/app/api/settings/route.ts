@@ -41,6 +41,8 @@ export async function PUT(req: NextRequest) {
       aboutDescription: valid.aboutDescription,
       logoUrl: valid.logoUrl || null,
       letterheadLogoUrl: valid.letterheadLogoUrl || null,
+      faviconUrl: valid.faviconUrl || null,
+      watermarkLogoUrl: valid.watermarkLogoUrl || null,
       whatsappNumber: valid.whatsappNumber,
       email: valid.email || null,
       address: valid.address || null,

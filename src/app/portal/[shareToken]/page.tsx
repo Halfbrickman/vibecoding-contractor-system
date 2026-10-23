@@ -235,6 +235,20 @@ export default async function ClientPortalPage({
                       <p className="text-xs text-slate-600 leading-relaxed">
                         {log.summary}
                       </p>
+                      {log.photoUrls?.[0] && (
+                        <a
+                          href={log.photoUrls[0]}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2.5 block rounded-lg overflow-hidden border border-slate-200 bg-white"
+                        >
+                          <img
+                            src={log.photoUrls[0]}
+                            alt={`Progres Minggu ${log.weekNumber}`}
+                            className="w-full h-36 object-cover hover:opacity-95 transition"
+                          />
+                        </a>
+                      )}
                     </div>
                   ))
                 )}
@@ -255,9 +269,19 @@ export default async function ClientPortalPage({
                       <span className="font-bold text-slate-900 block">
                         {t.terminName}
                       </span>
-                      <span className="text-slate-500">
+                      <span className="text-slate-500 block">
                         No. Invoice: {t.invoiceNumber || "-"}
                       </span>
+                      {t.paymentProof && (
+                        <a
+                          href={t.paymentProof}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-block mt-1 text-[11px] font-bold text-emerald-700 underline hover:text-emerald-600"
+                        >
+                          Lihat Bukti Pembayaran / Kwitansi
+                        </a>
+                      )}
                     </div>
                     <div className="text-right">
                       <span className="font-extrabold text-slate-900 block">

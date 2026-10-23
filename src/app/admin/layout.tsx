@@ -55,7 +55,7 @@ export default function AdminLayout({
               <img
                 src={logoUrl}
                 alt={companyName}
-                className="w-10 h-10 rounded-xl object-contain bg-white p-1 shrink-0"
+                className="w-12 h-12 object-contain shrink-0"
               />
             ) : (
               <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-extrabold shrink-0">
