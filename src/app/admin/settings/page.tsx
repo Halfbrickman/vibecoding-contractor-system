@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { ImagePlus, Save } from "lucide-react";
+import { ImagePlus, KeyRound, Save, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import CurrencyInput from "@/components/ui/CurrencyInput";
 
@@ -61,10 +61,27 @@ export default function AdminSettingsPage() {
   const [priceBangunLuxPerM2, setPriceBangunLuxPerM2] = useState(6500000);
   const [priceKontrakanPerM2, setPriceKontrakanPerM2] = useState(3200000);
 
+  // Pengaturan Akun Administrator
+  const [adminName, setAdminName] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [updatingAccount, setUpdatingAccount] = useState(false);
+
   const [savedToast, setSavedToast] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
   useEffect(() => {
+    // Ambil data Akun Admin
+    fetch("/api/auth/profile")
+      .then((r) => r.json())
+      .then((u) => {
+        if (u.name) setAdminName(u.name);
+        if (u.email) setAdminEmail(u.email);
+      })
+      .catch(() => {});
+
     fetch("/api/settings")
       .then((r) => r.json())
       .then((data) => {
@@ -199,6 +216,46 @@ export default function AdminSettingsPage() {
       }
       link.href = activeIcon;
     }
+  };
+
+  const handleUpdateAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentPassword) {
+      toast.error("Password saat ini wajib diisi untuk verifikasi keamanan");
+      return;
+    }
+    if (newPassword && newPassword !== confirmPassword) {
+      toast.error("Konfirmasi password baru tidak cocok");
+      return;
+    }
+    if (newPassword && newPassword.length < 4) {
+      toast.error("Password baru minimal 4 karakter");
+      return;
+    }
+
+    setUpdatingAccount(true);
+    const res = await fetch("/api/auth/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        currentPassword,
+        newName: adminName,
+        newEmail: adminEmail,
+        newPassword: newPassword || undefined,
+      }),
+    });
+    const data = await res.json();
+    setUpdatingAccount(false);
+
+    if (!res.ok) {
+      toast.error(data.error || "Gagal memperbarui akun");
+      return;
+    }
+
+    toast.success("Akun & Password Administrator berhasil diperbarui!");
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
   };
 
   return (
@@ -645,6 +702,113 @@ export default function AdminSettingsPage() {
           <span>Simpan Seluruh Pengaturan Compro</span>
         </button>
       </form>
+
+      {/* Bagian 5: Keamanan & Akun Login Administrator */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
+            <KeyRound className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="font-bold text-base text-slate-900">
+              5. Keamanan & Akun Login Administrator
+            </h2>
+            <p className="text-xs text-slate-500">
+              Ubah email login, nama pengguna, dan password akun admin sistem Anda.
+            </p>
+          </div>
+        </div>
+
+        <form onSubmit={handleUpdateAccount} className="space-y-4 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Nama Administrator
+              </label>
+              <input
+                type="text"
+                required
+                value={adminName}
+                onChange={(e) => setAdminName(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Email Login Baru
+              </label>
+              <input
+                type="email"
+                required
+                value={adminEmail}
+                onChange={(e) => setAdminEmail(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-100">
+            <div>
+              <label className="block text-xs font-bold text-rose-700 mb-1">
+                Password Saat Ini (Wajib)
+              </label>
+              <input
+                type="password"
+                required
+                placeholder="Ketik password lama Anda"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl border border-rose-300 text-sm focus:border-rose-500 focus:outline-none"
+              />
+              <span className="text-[10px] text-slate-400 mt-1 block">
+                Dibutuhkan untuk verifikasi perubahan akun
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Password Baru (Opsional)
+              </label>
+              <input
+                type="password"
+                placeholder="Kosongkan jika tidak ingin ganti"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm"
+              />
+              <span className="text-[10px] text-slate-400 mt-1 block">
+                Minimal 4 karakter
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Konfirmasi Password Baru
+              </label>
+              <input
+                type="password"
+                placeholder="Ulangi password baru"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="submit"
+              disabled={updatingAccount}
+              className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-6 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow transition"
+            >
+              <ShieldCheck className="w-4 h-4 text-amber-400" />
+              <span>
+                {updatingAccount ? "Menyimpan..." : "Update Akun & Password Administrator"}
+              </span>
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

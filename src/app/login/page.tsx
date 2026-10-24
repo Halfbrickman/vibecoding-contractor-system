@@ -7,8 +7,8 @@ import { ArrowLeft, HardHat, Lock, Mail, ShieldCheck } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@kontraktor.com");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -126,11 +126,6 @@ export default function LoginPage() {
             <span>{loading ? "Memverifikasi..." : "Masuk ke Panel Admin"}</span>
           </button>
         </form>
-
-        <div className="mt-6 pt-4 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
-          <span>Akun Default: admin@kontraktor.com</span>
-          <span>Pass: admin123</span>
-        </div>
       </div>
     </div>
   );
