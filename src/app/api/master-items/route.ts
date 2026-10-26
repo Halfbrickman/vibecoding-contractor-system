@@ -2,11 +2,78 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { masterItemSchema } from "@/lib/validations";
 
-export async function GET() {
-  const items = await prisma.masterItem.findMany({
-    orderBy: [{ category: "asc" }, { code: "asc" }, { name: "asc" }],
-  });
-  return NextResponse.json(items);
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
+    const limit = Math.max(
+      1,
+      Math.min(200, parseInt(searchParams.get("limit") || "50"))
+    );
+    const search = searchParams.get("search")?.trim() || "";
+    const category = searchParams.get("category") || "ALL";
+    const workGroup = searchParams.get("workGroup") || "ALL";
+    const fetchAll = searchParams.get("all") === "true";
+
+    const where: Record<string, unknown> = {};
+
+    if (category !== "ALL") {
+      where.category = category;
+    }
+    if (workGroup !== "ALL") {
+      where.workGroup = workGroup;
+    }
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { code: { contains: search, mode: "insensitive" } },
+        { workGroup: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    // Kompatibilitas jika dipanggil dengan all=true
+    if (fetchAll) {
+      const items = await prisma.masterItem.findMany({
+        where,
+        orderBy: [{ workGroup: "asc" }, { code: "asc" }, { name: "asc" }],
+      });
+      return NextResponse.json(items);
+    }
+
+    // Server-Side Pagination: hanya ambil 50 baris yang dibutuhkan
+    const [total, items, distinctGroups] = await Promise.all([
+      prisma.masterItem.count({ where }),
+      prisma.masterItem.findMany({
+        where,
+        orderBy: [{ workGroup: "asc" }, { code: "asc" }, { name: "asc" }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.masterItem.findMany({
+        where: { workGroup: { not: null } },
+        distinct: ["workGroup"],
+        select: { workGroup: true },
+        orderBy: { workGroup: "asc" },
+      }),
+    ]);
+
+    return NextResponse.json({
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+      groups: distinctGroups
+        .map((g) => g.workGroup)
+        .filter(Boolean) as string[],
+    });
+  } catch (error) {
+    console.error("Fetch master items error:", error);
+    return NextResponse.json(
+      { error: "Gagal memuat master items" },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(req: NextRequest) {

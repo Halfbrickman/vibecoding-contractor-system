@@ -79,52 +79,74 @@ export default function MasterItemsPage() {
   const [editCatOrder, setEditCatOrder] = useState<number>(1);
   const [editCatDefault, setEditCatDefault] = useState<boolean>(true);
 
-  const fetchAll = async () => {
-    const [resItems, resCats] = await Promise.all([
-      fetch("/api/master-items"),
-      fetch("/api/master-categories"),
-    ]);
-    const dataItems = await resItems.json();
-    const dataCats = await resCats.json();
-    setItems(dataItems);
-    setCategories(dataCats);
-    setCatOrder((dataCats?.length || 0) + 1);
+  // Server-Side Pagination & Loading State
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [uniqueGroups, setUniqueGroups] = useState<string[]>([]);
+  const [loadingItems, setLoadingItems] = useState(false);
+
+  const fetchItems = async (
+    page = currentPage,
+    q = searchQuery,
+    cat = filterCat,
+    grp = filterGroup
+  ) => {
+    setLoadingItems(true);
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(PAGE_SIZE),
+        search: q,
+        category: cat,
+        workGroup: grp,
+      });
+      const res = await fetch(`/api/master-items?${params.toString()}`);
+      const data = await res.json();
+      if (data && Array.isArray(data.items)) {
+        setItems(data.items);
+        setTotalItems(data.total || 0);
+        setTotalPages(data.totalPages || 1);
+        if (Array.isArray(data.groups) && data.groups.length > 0) {
+          setUniqueGroups(data.groups);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Gagal memuat katalog harga");
+    } finally {
+      setLoadingItems(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch("/api/master-categories");
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setCategories(data);
+        setCatOrder(data.length + 1);
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   useEffect(() => {
-    fetchAll();
+    fetchCategories();
   }, []);
 
-  // Daftar unik kelompok bab pekerjaan untuk filter dropdown
-  const uniqueGroups = useMemo(() => {
-    const set = new Set<string>();
-    items.forEach((i) => {
-      if (i.workGroup) set.add(i.workGroup);
-    });
-    return Array.from(set);
-  }, [items]);
+  useEffect(() => {
+    fetchItems(currentPage, searchQuery, filterCat, filterGroup);
+  }, [currentPage, filterCat, filterGroup]);
 
-  // Filter + Search untuk Katalog Harga Satuan
-  const filteredItems = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    return items.filter((item) => {
-      if (filterCat !== "ALL" && item.category !== filterCat) return false;
-      if (filterGroup !== "ALL" && item.workGroup !== filterGroup) return false;
-      if (!q) return true;
-      return (
-        item.name.toLowerCase().includes(q) ||
-        (item.code && item.code.toLowerCase().includes(q)) ||
-        (item.workGroup && item.workGroup.toLowerCase().includes(q))
-      );
-    });
-  }, [items, filterCat, filterGroup, searchQuery]);
-
-  // Pagination
-  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
-  const paginatedItems = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return filteredItems.slice(start, start + PAGE_SIZE);
-  }, [filteredItems, currentPage]);
+  // Debounce search agar tidak spam request setiap ketik 1 huruf
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCurrentPage(1);
+      fetchItems(1, searchQuery, filterCat, filterGroup);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Filter + Search untuk Master Kategori Pekerjaan
   const filteredCategories = useMemo(() => {
@@ -156,7 +178,7 @@ export default function MasterItemsPage() {
     setName("");
     setDefaultPrice(0);
     toast.success("Item berhasil ditambahkan ke Master Harga Satuan!");
-    fetchAll();
+    fetchItems(1, searchQuery, filterCat, filterGroup);
   };
 
   // Import Excel AHSP (.xlsx) langsung dari Browser
@@ -245,7 +267,8 @@ export default function MasterItemsPage() {
           `Berhasil mengimpor ${data.importedCount} item pekerjaan & ${parsedCategories.length} bab kategori dari Excel!`
         );
         setCurrentPage(1);
-        fetchAll();
+        fetchItems(1, "", "ALL", "ALL");
+        fetchCategories();
       } else {
         toast.error(data.error || "Gagal mengimpor file Excel");
       }
@@ -281,13 +304,13 @@ export default function MasterItemsPage() {
     });
     setEditingId(null);
     toast.success("Perubahan harga satuan berhasil disimpan!");
-    fetchAll();
+    fetchItems(currentPage, searchQuery, filterCat, filterGroup);
   };
 
   const handleDeleteItem = async (id: string) => {
     await fetch(`/api/master-items?id=${id}`, { method: "DELETE" });
     toast.success("Item dihapus dari Master Harga Satuan.");
-    fetchAll();
+    fetchItems(currentPage, searchQuery, filterCat, filterGroup);
   };
 
   const handleCreateCat = async (e: React.FormEvent) => {
@@ -303,7 +326,7 @@ export default function MasterItemsPage() {
     });
     setCatName("");
     toast.success("Master Kategori Pekerjaan RAB berhasil ditambahkan!");
-    fetchAll();
+    fetchCategories();
   };
 
   const startEditCat = (cat: MasterRabCategory) => {
@@ -326,13 +349,13 @@ export default function MasterItemsPage() {
     });
     setEditingCatId(null);
     toast.success("Master Kategori Pekerjaan berhasil diperbarui!");
-    fetchAll();
+    fetchCategories();
   };
 
   const handleDeleteCat = async (id: string) => {
     await fetch(`/api/master-categories?id=${id}`, { method: "DELETE" });
     toast.success("Master Kategori Pekerjaan dihapus.");
-    fetchAll();
+    fetchCategories();
   };
 
   return (
@@ -374,7 +397,7 @@ export default function MasterItemsPage() {
             }`}
           >
             <Database className="w-4 h-4" />
-            <span>1. Katalog Harga ({items.length})</span>
+            <span>1. Katalog Harga ({totalItems})</span>
           </button>
 
           <button
@@ -563,15 +586,15 @@ export default function MasterItemsPage() {
 
               <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
                 <span>
-                  Menampilkan <strong>{paginatedItems.length}</strong> dari{" "}
-                  <strong>{filteredItems.length} item</strong> yang cocok
+                  Menampilkan <strong>{items.length}</strong> dari{" "}
+                  <strong>{totalItems} item</strong> yang cocok
                 </span>
 
                 {totalPages > 1 && (
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      disabled={currentPage <= 1}
+                      disabled={currentPage <= 1 || loadingItems}
                       onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                       className="p-1.5 rounded-lg border border-slate-300 disabled:opacity-40 hover:bg-slate-100"
                     >
@@ -582,7 +605,7 @@ export default function MasterItemsPage() {
                     </span>
                     <button
                       type="button"
-                      disabled={currentPage >= totalPages}
+                      disabled={currentPage >= totalPages || loadingItems}
                       onClick={() =>
                         setCurrentPage((p) => Math.min(totalPages, p + 1))
                       }
@@ -610,7 +633,27 @@ export default function MasterItemsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {paginatedItems.map((item) => {
+                  {loadingItems ? (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="py-12 text-center text-xs text-slate-500"
+                      >
+                        <div className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-amber-500 border-t-transparent mb-2" />
+                        <p>Memuat data katalog harga satuan...</p>
+                      </td>
+                    </tr>
+                  ) : items.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="py-12 text-center text-xs text-slate-500"
+                      >
+                        Tidak ada item pekerjaan yang cocok dengan pencarian / filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    items.map((item) => {
                     const isEditing = editingId === item.id;
                     return (
                       <tr key={item.id} className="hover:bg-slate-50">
@@ -704,8 +747,9 @@ export default function MasterItemsPage() {
                         </td>
                       </tr>
                     );
-                  })}
-                </tbody>
+                  })
+                )}
+              </tbody>
               </table>
             </div>
           </div>
