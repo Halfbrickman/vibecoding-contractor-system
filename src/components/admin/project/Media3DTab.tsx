@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import PanoramaViewerModal from "@/components/PanoramaViewerModal";
-import { applyImageWatermark } from "@/lib/watermark";
+import { optimizeImageToWebP } from "@/lib/imageOptimizer";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export default function Media3DTab({
@@ -39,10 +39,11 @@ export default function Media3DTab({
     const rawFile = e.target.files?.[0];
     if (!rawFile) return;
 
-    let fileToUpload = rawFile;
-    if (useWatermark && mediaType !== "PANORAMA_360" && watermarkUrl) {
-      fileToUpload = await applyImageWatermark(rawFile, watermarkUrl);
-    }
+    const isPanorama = mediaType === "PANORAMA_360";
+    const fileToUpload = await optimizeImageToWebP(rawFile, {
+      watermarkUrl: useWatermark && !isPanorama ? watermarkUrl : null,
+      isPanorama,
+    });
 
     const fileUrl = await onUploadFile(fileToUpload, "renders");
     await fetch(`/api/projects/${project.id}/extras`, {

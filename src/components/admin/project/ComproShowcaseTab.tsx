@@ -7,7 +7,7 @@ import {
   Save,
 } from "lucide-react";
 import { toast } from "sonner";
-import { applyImageWatermark } from "@/lib/watermark";
+import { optimizeImageToWebP } from "@/lib/imageOptimizer";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export default function ComproShowcaseTab({
@@ -51,10 +51,9 @@ export default function ComproShowcaseTab({
     const rawFile = e.target.files?.[0];
     if (!rawFile) return;
 
-    let fileToUpload = rawFile;
-    if (useWatermark && watermarkUrl) {
-      fileToUpload = await applyImageWatermark(rawFile, watermarkUrl);
-    }
+    const fileToUpload = await optimizeImageToWebP(rawFile, {
+      watermarkUrl: useWatermark ? watermarkUrl : null,
+    });
 
     const url = await onUploadFile(fileToUpload, "showcase");
     if (!url) return;

@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { ImagePlus, KeyRound, Save, ShieldCheck } from "lucide-react";
+import { ImagePlus, KeyRound, Save, ShieldCheck, Sparkles, Zap } from "lucide-react";
 import { toast } from "sonner";
 import CurrencyInput from "@/components/ui/CurrencyInput";
+import { optimizeImageToWebP } from "@/lib/imageOptimizer";
 
 interface WorkflowCard {
   title: string;
@@ -71,6 +72,12 @@ export default function AdminSettingsPage() {
 
   const [savedToast, setSavedToast] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [convertingWebp, setConvertingWebp] = useState(false);
+  const [webpResult, setWebpResult] = useState<{
+    convertedCount: number;
+    dbUpdates: number;
+    savedSpaceKB: number;
+  } | null>(null);
 
   useEffect(() => {
     // Ambil data Akun Admin
@@ -136,26 +143,65 @@ export default function AdminSettingsPage() {
     e: React.ChangeEvent<HTMLInputElement>,
     target: "MAIN" | "LETTERHEAD" | "FAVICON" | "WATERMARK" | "HERO"
   ) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const rawFile = e.target.files?.[0];
+    if (!rawFile) return;
     setUploadingLogo(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("folder", "branding");
+    try {
+      const file = await optimizeImageToWebP(rawFile, { isPanorama: false });
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "branding");
 
-    const res = await fetch("/api/upload", { method: "POST", body: formData });
-    const data = await res.json();
-    setUploadingLogo(false);
-    if (!res.ok) {
-      toast.error(data.error || "Gagal mengunggah gambar");
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      setUploadingLogo(false);
+      if (!res.ok) {
+        toast.error(data.error || "Gagal mengunggah gambar");
+        return;
+      }
+      if (target === "MAIN") setLogoUrl(data.fileUrl);
+      else if (target === "LETTERHEAD") setLetterheadLogoUrl(data.fileUrl);
+      else if (target === "FAVICON") setFaviconUrl(data.fileUrl);
+      else if (target === "WATERMARK") setWatermarkLogoUrl(data.fileUrl);
+      else if (target === "HERO") setHeroImageUrl(data.fileUrl);
+      toast.success("Gambar berhasil diunggah! Jangan lupa klik Simpan di bawah.");
+    } catch (err: any) {
+      setUploadingLogo(false);
+      toast.error(err.message || "Gagal memproses gambar");
+    }
+  };
+
+  const handleConvertExistingWebp = async () => {
+    if (
+      !confirm(
+        "Konversi semua gambar JPG/PNG lama di server ke format WebP? File lama akan digantikan dengan WebP yang 5x-10x lebih ringan tanpa mengurangi kualitas, dan database akan diperbarui otomatis."
+      )
+    ) {
       return;
     }
-    if (target === "MAIN") setLogoUrl(data.fileUrl);
-    else if (target === "LETTERHEAD") setLetterheadLogoUrl(data.fileUrl);
-    else if (target === "FAVICON") setFaviconUrl(data.fileUrl);
-    else if (target === "WATERMARK") setWatermarkLogoUrl(data.fileUrl);
-    else if (target === "HERO") setHeroImageUrl(data.fileUrl);
-    toast.success("Gambar berhasil diunggah! Jangan lupa klik Simpan di bawah.");
+    setConvertingWebp(true);
+    setWebpResult(null);
+    try {
+      const res = await fetch("/api/admin/convert-webp", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Gagal melakukan konversi WebP");
+      } else {
+        setWebpResult({
+          convertedCount: data.convertedCount,
+          dbUpdates: data.dbUpdates,
+          savedSpaceKB: data.savedSpaceKB,
+        });
+        toast.success(
+          data.message ||
+            `Berhasil mengonversi ${data.convertedCount} gambar ke WebP!`
+        );
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Terjadi kesalahan saat memproses gambar.");
+    } finally {
+      setConvertingWebp(false);
+    }
   };
 
   const handleCardChange = (
@@ -808,6 +854,55 @@ export default function AdminSettingsPage() {
             </button>
           </div>
         </form>
+      </div>
+
+      {/* 6. Optimasi Performa & Format Gambar */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 sm:p-8 space-y-4">
+        <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+          <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
+            <Zap className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="font-bold text-base text-slate-900 flex items-center gap-2">
+              6. Optimasi Kecepatan & Format Gambar (WebP)
+              <span className="text-[10px] bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-full font-semibold border border-emerald-200">
+                Otomatis Aktif
+              </span>
+            </h2>
+            <p className="text-xs text-slate-500">
+              Setiap foto proyek, render 3D, dan bukti transaksi yang diunggah otomatis dikonversi ke WebP resolusi tinggi agar loading website secepat kilat.
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              Migrasi Gambar Lama ke WebP
+            </h3>
+            <p className="text-xs text-slate-500 max-w-xl leading-relaxed">
+              Jika Anda memiliki foto proyek atau render lama berformat JPG/PNG berukuran besar di server, klik tombol ini untuk mengonversi semuanya ke WebP sekaligus dan memperbarui database secara otomatis tanpa mengubah tampilan.
+            </p>
+            {webpResult && (
+              <div className="mt-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 p-2.5 rounded-lg inline-block">
+                ✓ Selesai: <strong>{webpResult.convertedCount}</strong> gambar dikonversi, <strong>{webpResult.dbUpdates}</strong> data DB diperbarui, ruang server dihemat <strong>{(webpResult.savedSpaceKB / 1024).toFixed(2)} MB</strong>.
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleConvertExistingWebp}
+            disabled={convertingWebp}
+            className="shrink-0 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-900 font-bold px-5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+          >
+            <Zap className="w-4 h-4" />
+            <span>
+              {convertingWebp ? "Sedang Mengonversi..." : "Konversi Semua Gambar Lama ke WebP"}
+            </span>
+          </button>
+        </div>
       </div>
     </div>
   );

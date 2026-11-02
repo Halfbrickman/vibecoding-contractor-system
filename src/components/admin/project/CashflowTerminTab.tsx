@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { formatRupiah } from "@/lib/format";
 import CurrencyInput from "@/components/ui/CurrencyInput";
+import { optimizeImageToWebP } from "@/lib/imageOptimizer";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export default function CashflowTerminTab({
@@ -93,10 +94,11 @@ export default function CashflowTerminTab({
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const url = await onUploadFile(file, folder);
+      const optimized = await optimizeImageToWebP(file, { maxWidth: 1920, maxHeight: 1920 });
+      const url = await onUploadFile(optimized, folder);
       if (url) {
         setter(url);
-        toast.success("Foto bukti berhasil dilampirkan!");
+        toast.success("Foto bukti berhasil dilampirkan (WebP)!");
       }
     } catch {
       toast.error("Gagal mengunggah foto bukti");

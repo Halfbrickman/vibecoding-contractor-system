@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import sharp from "sharp";
 import { ALLOWED_EXTENSIONS, MAX_UPLOAD_SIZE_BYTES } from "@/lib/validations";
+
+const CONVERTIBLE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".bmp"];
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,11 +38,29 @@ export async function POST(req: NextRequest) {
     }
 
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    let buffer = Buffer.from(bytes);
+    let finalExt = ext;
+
+    // Otomatis konversi gambar bitmap (JPG, PNG) menjadi WebP jika belum berformat WebP
+    if (CONVERTIBLE_EXTENSIONS.includes(ext)) {
+      try {
+        buffer = await sharp(buffer)
+          .webp({ quality: 85, effort: 4 })
+          .toBuffer();
+        finalExt = ".webp";
+      } catch (err) {
+        console.warn(
+          "Server-side WebP conversion fallback ke buffer asli:",
+          err
+        );
+      }
+    }
 
     // Sanitasi nama file
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const uniqueFileName = `${Date.now()}-${safeName}`;
+    const rawBaseName = path
+      .basename(file.name, ext)
+      .replace(/[^a-zA-Z0-9._-]/g, "_");
+    const uniqueFileName = `${Date.now()}-${rawBaseName}${finalExt}`;
 
     // Mendukung penyimpanan ke folder lokal / Home Server NAS path dari .env
     const baseUploadDir = process.env.LOCAL_UPLOAD_DIR || "./public/uploads";
@@ -49,13 +70,14 @@ export async function POST(req: NextRequest) {
     const filePath = path.join(targetDir, uniqueFileName);
     await writeFile(filePath, buffer);
 
-    const publicBaseUrl = process.env.NEXT_PUBLIC_STORAGE_BASE_URL || "/uploads";
+    const publicBaseUrl =
+      process.env.NEXT_PUBLIC_STORAGE_BASE_URL || "/uploads";
     const fileUrl = `${publicBaseUrl}/${folder}/${uniqueFileName}`;
 
     return NextResponse.json({
       fileUrl,
-      fileName: file.name,
-      fileSize: file.size,
+      fileName: `${rawBaseName}${finalExt}`,
+      fileSize: buffer.length,
     });
   } catch (error) {
     console.error("Upload error:", error);
