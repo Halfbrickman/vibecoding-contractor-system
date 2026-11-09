@@ -11,6 +11,7 @@ import {
   ImagePlus,
   Layers,
   Printer,
+  Ruler,
   Trash2,
   Wallet,
 } from "lucide-react";
@@ -20,6 +21,7 @@ import Media3DTab from "@/components/admin/project/Media3DTab";
 import DocumentsRevitTab from "@/components/admin/project/DocumentsRevitTab";
 import CashflowTerminTab from "@/components/admin/project/CashflowTerminTab";
 import ComproShowcaseTab from "@/components/admin/project/ComproShowcaseTab";
+import SketchStudioTab from "@/components/admin/project/SketchStudioTab";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export default function ProjectDetailClient({
@@ -35,7 +37,7 @@ export default function ProjectDetailClient({
 }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<
-    "RAB" | "MEDIA_3D" | "REVIT_DOC" | "CASHFLOW" | "COMPRO"
+    "RAB" | "MEDIA_3D" | "REVIT_DOC" | "CASHFLOW" | "COMPRO" | "SKETCH"
   >("RAB");
   const [uploading, setUploading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -227,6 +229,19 @@ export default function ProjectDetailClient({
           <Globe className="w-4 h-4" />
           <span>5. Tampilan Compro & Link WA Klien</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("SKETCH")}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition ${
+            activeTab === "SKETCH"
+              ? "bg-amber-500 text-slate-950 shadow"
+              : "bg-white text-slate-600 hover:bg-slate-100"
+          }`}
+        >
+          <Ruler className="w-4 h-4 text-amber-600" />
+          <span>6. Sketsa & Survei ({project.sketches?.length || 0})</span>
+        </button>
       </div>
 
       {/* Render Komponen Tab Aktif */}
@@ -279,6 +294,13 @@ export default function ProjectDetailClient({
           }
           onUploadFile={uploadFileToServer}
           uploading={uploading}
+          onRefresh={() => router.refresh()}
+        />
+      )}
+
+      {activeTab === "SKETCH" && (
+        <SketchStudioTab
+          project={project}
           onRefresh={() => router.refresh()}
         />
       )}

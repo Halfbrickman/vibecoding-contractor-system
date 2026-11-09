@@ -41,6 +41,36 @@ export async function POST(
       return NextResponse.json(doc);
     }
 
+    if (body.action === "ADD_SKETCH") {
+      const sketch = await prisma.projectSketch.create({
+        data: {
+          projectId,
+          title: body.title || "Sketsa Denah Lapangan",
+          roomName: body.roomName || "Denah Utama",
+          imageUrl: body.imageUrl,
+          sketchData: body.sketchData ? JSON.stringify(body.sketchData) : null,
+          scaleMeters: Number(body.scaleMeters) || 1.0,
+          notes: body.notes || "",
+        },
+      });
+      return NextResponse.json(sketch);
+    }
+
+    if (body.action === "UPDATE_SKETCH") {
+      const sketch = await prisma.projectSketch.update({
+        where: { id: body.sketchId },
+        data: {
+          title: body.title,
+          roomName: body.roomName,
+          imageUrl: body.imageUrl,
+          sketchData: body.sketchData ? JSON.stringify(body.sketchData) : null,
+          scaleMeters: Number(body.scaleMeters) || 1.0,
+          notes: body.notes,
+        },
+      });
+      return NextResponse.json(sketch);
+    }
+
     if (body.action === "ADD_EXPENSE") {
       const parsed = expenseCreateSchema.safeParse(body);
       if (!parsed.success) {
@@ -237,6 +267,8 @@ export async function DELETE(req: NextRequest) {
     await prisma.paymentTermin.delete({ where: { id } });
   } else if (target === "progress") {
     await prisma.progressLog.delete({ where: { id } });
+  } else if (target === "sketch") {
+    await prisma.projectSketch.delete({ where: { id } });
   }
 
   return NextResponse.json({ success: true });

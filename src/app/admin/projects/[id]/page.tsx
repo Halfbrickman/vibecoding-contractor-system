@@ -18,6 +18,7 @@ export default async function AdminProjectDetailPage({
       client: true,
       media: { orderBy: { sortOrder: "asc" } },
       documents: { orderBy: { uploadedAt: "desc" } },
+      sketches: { orderBy: { createdAt: "desc" } },
       rabCategories: {
         include: { items: { orderBy: { sortOrder: "asc" } } },
         orderBy: { sortOrder: "asc" },

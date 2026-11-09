@@ -111,6 +111,7 @@ model Project {
   client            Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
   media             ProjectMedia[]
   documents         ProjectDocument[]
+  sketches          ProjectSketch[]
   rabCategories     RabCategory[]
   progressLogs      ProgressLog[]
   paymentTermins    PaymentTermin[]
@@ -176,6 +177,21 @@ enum DocumentType {
   RAB_EXCEL     // File .xlsx asli bapak
   CONTRACT_PDF  // Dokumen SPK / Kontrak Kerja
   OTHER
+}
+
+// Sketsa Denah Kasar & Catatan Ukuran Lapangan (Survei)
+model ProjectSketch {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String   @default("Sketsa Denah Lapangan")
+  roomName    String?  // Misal: "Lantai 1", "Dapur", dll
+  imageUrl    String   // File gambar WebP hasil render canvas untuk preview & dokumen
+  sketchData  String?  @db.Text // JSON data vector elemen agar bisa diedit ulang di tablet
+  scaleMeters Float    @default(1.0) // 1 Kotak grid = X meter (default 1.0 m)
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // ==========================================
