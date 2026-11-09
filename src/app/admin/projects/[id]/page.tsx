@@ -31,10 +31,6 @@ export default async function AdminProjectDetailPage({
 
   if (!project) return notFound();
 
-  const masterItems = await prisma.masterItem.findMany({
-    orderBy: [{ workGroup: "asc" }, { name: "asc" }],
-  });
-
   const masterCategories = await prisma.masterRabCategory.findMany({
     orderBy: { sortOrder: "asc" },
   });
@@ -44,7 +40,6 @@ export default async function AdminProjectDetailPage({
   return (
     <ProjectDetailClient
       project={JSON.parse(JSON.stringify(project))}
-      masterItems={JSON.parse(JSON.stringify(masterItems))}
       masterCategories={JSON.parse(JSON.stringify(masterCategories))}
       companyProfile={JSON.parse(JSON.stringify(companyProfile))}
     />

@@ -26,12 +26,10 @@ import SketchStudioTab from "@/components/admin/project/SketchStudioTab";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export default function ProjectDetailClient({
   project,
-  masterItems,
   masterCategories,
   companyProfile,
 }: {
   project: any;
-  masterItems: any[];
   masterCategories: any[];
   companyProfile: any;
 }) {
@@ -248,7 +246,6 @@ export default function ProjectDetailClient({
       {activeTab === "RAB" && (
         <RabManagerTab
           project={project}
-          masterItems={masterItems}
           masterCategories={masterCategories}
           companyProfile={companyProfile}
           onRefresh={() => router.refresh()}

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import {
   ArrowDown,
@@ -27,7 +27,7 @@ export default function RabManagerTab({
   onRefresh,
 }: {
   project: any;
-  masterItems: any[];
+  masterItems?: any[];
   masterCategories: any[];
   companyProfile: any;
   onRefresh: () => void;
@@ -42,9 +42,16 @@ export default function RabManagerTab({
   const [unitPrice, setUnitPrice] = useState<number>(0);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // State Pencarian Pintar (Autocomplete) Master Harga Satuan (2.667 item)
+  // State Pencarian Pintar (Autocomplete) Master Harga Satuan
   const [masterSearch, setMasterSearch] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [matchingMasterItems, setMatchingMasterItems] = useState<any[]>(
+    masterItems?.slice(0, 12) || []
+  );
+  const [searchingMaster, setSearchingMaster] = useState(false);
+  const [totalMasterCount, setTotalMasterCount] = useState<number>(
+    masterItems?.length || 2667
+  );
 
   // State Pencarian di dalam Tabel RAB Proyek
   const [rabTableSearch, setRabTableSearch] = useState("");
@@ -61,19 +68,34 @@ export default function RabManagerTab({
   const [editItemUnit, setEditItemUnit] = useState("m2");
   const [editItemPrice, setEditItemPrice] = useState<number>(0);
 
-  // Filter maksimal 15 hasil teratas saat mengetik di kotak pencarian Master AHSP
-  const matchingMasterItems = useMemo(() => {
-    const q = masterSearch.toLowerCase().trim();
-    if (!q) return masterItems.slice(0, 12);
-    return masterItems
-      .filter(
-        (m) =>
-          m.name.toLowerCase().includes(q) ||
-          (m.code && m.code.toLowerCase().includes(q)) ||
-          (m.workGroup && m.workGroup.toLowerCase().includes(q))
-      )
-      .slice(0, 15);
-  }, [masterItems, masterSearch]);
+  // Server-side debounced search agar tidak meload ribuan item di awal render
+  useEffect(() => {
+    let ignore = false;
+    setSearchingMaster(true);
+    const timer = setTimeout(async () => {
+      try {
+        const q = encodeURIComponent(masterSearch.trim());
+        const res = await fetch(`/api/master-items?search=${q}&limit=15`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!ignore) {
+          setMatchingMasterItems(data.items || []);
+          if (typeof data.total === "number") {
+            setTotalMasterCount(data.total);
+          }
+        }
+      } catch (err) {
+        console.error("Gagal mencari master items:", err);
+      } finally {
+        if (!ignore) setSearchingMaster(false);
+      }
+    }, 250);
+
+    return () => {
+      ignore = true;
+      clearTimeout(timer);
+    };
+  }, [masterSearch]);
 
   const handlePickMasterItem = (found: any) => {
     setDescription(found.name);
@@ -329,10 +351,10 @@ export default function RabManagerTab({
                 </select>
               </div>
 
-              {/* Searchable Combobox untuk 2.667 Item Master Harga Satuan */}
+              {/* Searchable Combobox untuk Item Master Harga Satuan */}
               <div className="relative">
                 <label className="block text-xs font-bold text-slate-600 mb-1">
-                  2. Cari di Master Harga Satuan ({masterItems.length} Item AHSP)
+                  2. Cari di Master Harga Satuan ({totalMasterCount} Item AHSP)
                 </label>
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 text-amber-600 absolute left-3 top-2.5" />
@@ -363,7 +385,11 @@ export default function RabManagerTab({
 
                 {showSuggestions && (
                   <div className="absolute z-30 left-0 right-0 mt-1 max-h-64 overflow-y-auto bg-white rounded-xl border border-slate-300 shadow-2xl divide-y divide-slate-100">
-                    {matchingMasterItems.length === 0 ? (
+                    {searchingMaster ? (
+                      <div className="p-3 text-xs text-slate-400 text-center animate-pulse">
+                        Mencari di database AHSP...
+                      </div>
+                    ) : matchingMasterItems.length === 0 ? (
                       <div className="p-3 text-xs text-slate-400 text-center">
                         Tidak ditemukan item yang cocok
                       </div>
