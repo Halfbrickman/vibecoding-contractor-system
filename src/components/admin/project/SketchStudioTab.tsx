@@ -94,6 +94,13 @@ export default function SketchStudioTab({
   const [activeTool, setActiveTool] = useState<ToolType>("WALL");
   const [activeColor, setActiveColor] = useState("#0f172a"); // slate-900
   const [strokeWidth, setStrokeWidth] = useState(4);
+  const [penThickness, setPenThickness] = useState<number>(1.5); // 1.5 (Tipis), 3 (Sedang), 5 (Tebal)
+  const [textFontSize, setTextFontSize] = useState<number>(14); // 11, 14, 18
+  const [draggingTextId, setDraggingTextId] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({
+    x: 0,
+    y: 0,
+  });
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
   const [showDimensions, setShowDimensions] = useState(true);
@@ -460,6 +467,17 @@ export default function SketchStudioTab({
 
       // --- DOOR (Bukaan Pintu) ---
       else if (el.type === "DOOR") {
+        // MASKING DINDING: Garis putih tebal (10px) agar memotong dinding di bawahnya
+        ctx.save();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 10;
+        ctx.lineCap = "square";
+        ctx.beginPath();
+        ctx.moveTo(el.x1, el.y1);
+        ctx.lineTo(el.x2, el.y2);
+        ctx.stroke();
+        ctx.restore();
+
         ctx.strokeStyle = "#475569";
         ctx.lineWidth = 3;
         ctx.beginPath();
@@ -486,6 +504,17 @@ export default function SketchStudioTab({
         const dy = el.y2 - el.y1;
         const angle = Math.atan2(dy, dx);
         const offset = 4;
+
+        // MASKING DINDING: Garis putih tebal (12px) agar memotong dinding di bawahnya
+        ctx.save();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 12;
+        ctx.lineCap = "square";
+        ctx.beginPath();
+        ctx.moveTo(el.x1, el.y1);
+        ctx.lineTo(el.x2, el.y2);
+        ctx.stroke();
+        ctx.restore();
 
         ctx.strokeStyle = "#0284c7"; // sky-600
         ctx.lineWidth = 2.5;
@@ -534,7 +563,7 @@ export default function SketchStudioTab({
       // --- FREEHAND (Coretan Bebas / Stylus Pen) ---
       else if (el.type === "FREEHAND" && el.points && el.points.length > 1) {
         ctx.strokeStyle = el.color || "#ef4444";
-        ctx.lineWidth = el.strokeWidth || 3;
+        ctx.lineWidth = el.strokeWidth || 1.5;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
         ctx.beginPath();
@@ -547,13 +576,25 @@ export default function SketchStudioTab({
 
       // --- TEXT (Catatan Nama Ruangan) ---
       else if (el.type === "TEXT" && el.text) {
-        ctx.font = "bold 13px system-ui, sans-serif";
+        const fSize = el.strokeWidth || 14;
+        ctx.font = `bold ${fSize}px system-ui, sans-serif`;
         const textWidth = ctx.measureText(el.text).width;
-        ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-        ctx.fillRect(el.x1 - 4, el.y1 - 12, textWidth + 8, 20);
-        ctx.strokeStyle = "#cbd5e1";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(el.x1 - 4, el.y1 - 12, textWidth + 8, 20);
+        const boxHeight = fSize + 8;
+        ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+        ctx.fillRect(
+          el.x1 - 6,
+          el.y1 - boxHeight / 2,
+          textWidth + 12,
+          boxHeight
+        );
+        ctx.strokeStyle = draggingTextId === el.id ? "#f59e0b" : "#cbd5e1";
+        ctx.lineWidth = draggingTextId === el.id ? 2 : 1;
+        ctx.strokeRect(
+          el.x1 - 6,
+          el.y1 - boxHeight / 2,
+          textWidth + 12,
+          boxHeight
+        );
         ctx.fillStyle = el.color || "#0f172a";
         ctx.textBaseline = "middle";
         ctx.fillText(el.text, el.x1, el.y1);
@@ -563,7 +604,15 @@ export default function SketchStudioTab({
     };
 
     // 3. Render Seluruh Elemen yang Tersimpan
-    elements.forEach((el) => renderElement(el, false));
+    // PASS 1: Render semua dinding (WALL) terlebih dahulu
+    elements
+      .filter((el) => el.type === "WALL")
+      .forEach((el) => renderElement(el, false));
+
+    // PASS 2: Render Pintu, Jendela (yang melubangi dinding), Dimensi, Stylus, dan Teks
+    elements
+      .filter((el) => el.type !== "WALL")
+      .forEach((el) => renderElement(el, false));
 
     // 4. Render Elemen yang Sedang Ditarik Saat Ini (Preview)
     if (currentElement) {
@@ -577,6 +626,7 @@ export default function SketchStudioTab({
     currentElement,
     showDimensions,
     scaleMeters,
+    draggingTextId,
   ]);
 
   // Efek gambar ulang setiap ada perubahan
@@ -622,7 +672,7 @@ export default function SketchStudioTab({
     };
   };
 
-  // POINTER DOWN (Mulai Menggambar)
+  // POINTER DOWN (Mulai Menggambar / Geser Teks / Hapus)
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     // Palm Rejection: Jika diaktifkan, hanya respons stylus/pen atau mouse
     if (palmRejection && e.pointerType === "touch") {
@@ -631,18 +681,76 @@ export default function SketchStudioTab({
 
     const { x, y } = getCoordinates(e);
 
-    // MODE ERASER: Hapus elemen terdekat
+    // Deteksi apakah klik mengenai teks yang sudah ada
+    const touchedText = elements.find((el) => {
+      if (el.type !== "TEXT" || !el.text) return false;
+      const fSize = el.strokeWidth || 14;
+      const approxW = el.text.length * (fSize * 0.7) + 16;
+      const boxH = fSize + 12;
+      return (
+        x >= el.x1 - 8 &&
+        x <= el.x1 + approxW &&
+        y >= el.y1 - boxH / 2 &&
+        y <= el.y1 + boxH / 2
+      );
+    });
+
+    // MODE ERASER: Hapus elemen terdekat (Stylus, Teks, Dinding, Pintu, dll)
     if (activeTool === "ERASER") {
-      const clickRadius = 15;
+      const clickRadius = 22;
       const filtered = elements.filter((el) => {
-        // Cek jarak klik ke garis/titik
+        // A. Cek FREEHAND (Coretan Stylus): Cek ke SETIAP titik di sepanjang coretan
+        if (el.type === "FREEHAND" && el.points && el.points.length > 0) {
+          const touches = el.points.some(
+            (p) => Math.hypot(p.x - x, p.y - y) <= clickRadius
+          );
+          return !touches;
+        }
+
+        // B. Cek TEXT: Cek apakah klik berada di dalam kotak teks
+        if (el.type === "TEXT" && el.text) {
+          const fSize = el.strokeWidth || 14;
+          const approxW = el.text.length * (fSize * 0.7) + 16;
+          const boxH = fSize + 12;
+          const inBox =
+            x >= el.x1 - 8 &&
+            x <= el.x1 + approxW &&
+            y >= el.y1 - boxH / 2 &&
+            y <= el.y1 + boxH / 2;
+          return !inBox;
+        }
+
+        // C. Cek WALL, RULER, DOOR, WINDOW: Jarak ke titik ujung, tengah, atau segmen garis
         const d1 = Math.hypot(el.x1 - x, el.y1 - y);
         const d2 = Math.hypot(el.x2 - x, el.y2 - y);
         const midX = (el.x1 + el.x2) / 2;
         const midY = (el.y1 + el.y2) / 2;
         const dMid = Math.hypot(midX - x, midY - y);
-        return d1 > clickRadius && d2 > clickRadius && dMid > clickRadius;
+
+        const lineLen = Math.hypot(el.x2 - el.x1, el.y2 - el.y1);
+        let distToLine = clickRadius + 1;
+        if (lineLen > 0) {
+          const t = Math.max(
+            0,
+            Math.min(
+              1,
+              ((x - el.x1) * (el.x2 - el.x1) + (y - el.y1) * (el.y2 - el.y1)) /
+                (lineLen * lineLen)
+            )
+          );
+          const projX = el.x1 + t * (el.x2 - el.x1);
+          const projY = el.y1 + t * (el.y2 - el.y1);
+          distToLine = Math.hypot(projX - x, projY - y);
+        }
+
+        return (
+          d1 > clickRadius &&
+          d2 > clickRadius &&
+          dMid > clickRadius &&
+          distToLine > clickRadius
+        );
       });
+
       if (filtered.length !== elements.length) {
         setElements(filtered);
         pushToHistory(filtered);
@@ -650,7 +758,15 @@ export default function SketchStudioTab({
       return;
     }
 
-    // MODE TEXT: Tambah teks catatan
+    // Jika menyentuh teks (dan bukan penghapus): Masuk mode geser teks (DRAG & MOVE)
+    if (touchedText) {
+      setDraggingTextId(touchedText.id);
+      setDragOffset({ x: x - touchedText.x1, y: y - touchedText.y1 });
+      setIsDrawing(false);
+      return;
+    }
+
+    // MODE TEXT: Tambah teks baru saat klik area kosong
     if (activeTool === "TEXT") {
       const text = prompt("Masukkan Catatan / Nama Ruangan:", "Kamar Utama");
       if (text && text.trim()) {
@@ -663,6 +779,7 @@ export default function SketchStudioTab({
           y2: y,
           text: text.trim(),
           color: activeColor,
+          strokeWidth: textFontSize, // Ukuran font disimpan di strokeWidth (11, 14, 18)
         };
         const next = [...elements, newTextEl];
         setElements(next);
@@ -671,7 +788,7 @@ export default function SketchStudioTab({
       return;
     }
 
-    // MODE FREEHAND
+    // MODE FREEHAND: Menggunakan penThickness yang dipilih
     if (activeTool === "FREEHAND") {
       setIsDrawing(true);
       setCurrentElement({
@@ -683,7 +800,7 @@ export default function SketchStudioTab({
         y2: y,
         points: [{ x, y }],
         color: activeColor,
-        strokeWidth: strokeWidth,
+        strokeWidth: penThickness,
       });
       return;
     }
@@ -705,12 +822,26 @@ export default function SketchStudioTab({
     });
   };
 
-  // POINTER MOVE (Sedang Menggeser / Menarik Garis)
+  // POINTER MOVE (Sedang Menggeser Garis / Geser Teks)
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !currentElement) return;
     if (palmRejection && e.pointerType === "touch") return;
 
     const { x, y } = getCoordinates(e);
+
+    // Jika sedang menggeser teks (DRAG TEXT)
+    if (draggingTextId) {
+      setElements((prev) =>
+        prev.map((el) => {
+          if (el.id !== draggingTextId) return el;
+          const newX = snap(x - dragOffset.x, 10);
+          const newY = snap(y - dragOffset.y, 10);
+          return { ...el, x1: newX, y1: newY, x2: newX, y2: newY };
+        })
+      );
+      return;
+    }
+
+    if (!isDrawing || !currentElement) return;
 
     if (currentElement.type === "FREEHAND") {
       setCurrentElement((prev) => {
@@ -742,8 +873,14 @@ export default function SketchStudioTab({
     });
   };
 
-  // POINTER UP (Selesai Menggambar)
+  // POINTER UP (Selesai Menggambar / Selesai Geser Teks)
   const handlePointerUp = () => {
+    if (draggingTextId) {
+      setDraggingTextId(null);
+      pushToHistory(elements);
+      return;
+    }
+
     if (!isDrawing || !currentElement) return;
     setIsDrawing(false);
 
@@ -1194,7 +1331,7 @@ export default function SketchStudioTab({
                 </button>
               </div>
 
-              {/* Pilihan Warna & Tebal Garis */}
+              {/* Pilihan Warna, Tebal Garis & Ukuran Teks */}
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200">
                   {["#0f172a", "#ef4444", "#0284c7", "#16a34a", "#eab308"].map(
@@ -1213,6 +1350,94 @@ export default function SketchStudioTab({
                     )
                   )}
                 </div>
+
+                {/* 3 Opsi Ketebalan Coret Stylus */}
+                <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 text-xs">
+                  <span className="text-[10px] text-slate-400 font-bold px-1 hidden sm:inline">
+                    Stylus:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setPenThickness(1.5)}
+                    className={`px-2 py-0.5 rounded-lg font-bold text-[11px] transition ${
+                      penThickness === 1.5
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                    title="Garis Tipis (1.5px - Pas untuk Catatan Tangan)"
+                  >
+                    Tipis
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPenThickness(3)}
+                    className={`px-2 py-0.5 rounded-lg font-bold text-[11px] transition ${
+                      penThickness === 3
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                    title="Garis Sedang (3px)"
+                  >
+                    Sedang
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPenThickness(5)}
+                    className={`px-2 py-0.5 rounded-lg font-bold text-[11px] transition ${
+                      penThickness === 5
+                        ? "bg-slate-900 text-white"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                    title="Garis Tebal (5px)"
+                  >
+                    Tebal
+                  </button>
+                </div>
+
+                {/* Ukuran Teks (Hanya tampil saat mode TEXT aktif) */}
+                {activeTool === "TEXT" && (
+                  <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 text-xs animate-in fade-in">
+                    <span className="text-[10px] text-slate-400 font-bold px-1">
+                      Font:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setTextFontSize(11)}
+                      className={`px-2 py-0.5 rounded-lg font-bold text-[11px] transition ${
+                        textFontSize === 11
+                          ? "bg-amber-500 text-slate-950 font-extrabold"
+                          : "text-slate-600 hover:bg-slate-100"
+                      }`}
+                      title="Font Kecil (11px)"
+                    >
+                      S
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTextFontSize(14)}
+                      className={`px-2 py-0.5 rounded-lg font-bold text-[11px] transition ${
+                        textFontSize === 14
+                          ? "bg-amber-500 text-slate-950 font-extrabold"
+                          : "text-slate-600 hover:bg-slate-100"
+                      }`}
+                      title="Font Normal (14px)"
+                    >
+                      M
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTextFontSize(18)}
+                      className={`px-2 py-0.5 rounded-lg font-bold text-[11px] transition ${
+                        textFontSize === 18
+                          ? "bg-amber-500 text-slate-950 font-extrabold"
+                          : "text-slate-600 hover:bg-slate-100"
+                      }`}
+                      title="Font Besar (18px)"
+                    >
+                      L
+                    </button>
+                  </div>
+                )}
 
                 {/* Undo / Redo */}
                 <div className="flex items-center gap-0.5 bg-white p-1 rounded-xl border border-slate-200">
