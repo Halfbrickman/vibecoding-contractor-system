@@ -5,17 +5,20 @@ RUN apk add --no-cache openssl libc6-compat
 
 WORKDIR /app
 
-# Copy package manifest terlebih dahulu agar layer caching Docker cepat
+# Copy package manifest terlebih dahulu agar layer caching Docker maksimal
 COPY package.json package-lock.json* ./
-COPY prisma ./prisma/
 
-RUN npm install
+# Install dependencies (hanya re-run jika package.json berubah)
+RUN npm install --no-audit --prefer-offline
+
+# Copy schema prisma & generate client secara terpisah
+COPY prisma ./prisma/
+RUN npx prisma generate
 
 # Copy seluruh source code aplikasi
 COPY . .
 
-# Generate Prisma Client & Build Next.js Production
-RUN npx prisma generate
+# Build Next.js Production
 RUN npm run build
 
 # Pastikan folder uploads tersedia
