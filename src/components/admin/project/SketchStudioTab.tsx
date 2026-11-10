@@ -26,6 +26,9 @@ import {
   X,
   HelpCircle,
   FileEdit,
+  ArrowUpRight,
+  Move,
+  RotateCw,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -34,6 +37,7 @@ export type ToolType =
   | "RULER"
   | "DOOR"
   | "WINDOW"
+  | "ARROW"
   | "FREEHAND"
   | "TEXT"
   | "ERASER";
@@ -49,6 +53,7 @@ export interface SketchElement {
   text?: string; // for TEXT
   color?: string;
   strokeWidth?: number;
+  rotation?: number; // for TEXT: 0, 90, 180, 270
 }
 
 interface ProjectSketchRecord {
@@ -97,6 +102,7 @@ export default function SketchStudioTab({
   const [penThickness, setPenThickness] = useState<number>(1.5); // 1.5 (Tipis), 3 (Sedang), 5 (Tebal)
   const [textFontSize, setTextFontSize] = useState<number>(14); // 11, 14, 18
   const [draggingTextId, setDraggingTextId] = useState<string | null>(null);
+  const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({
     x: 0,
     y: 0,
@@ -105,6 +111,13 @@ export default function SketchStudioTab({
   const [showGrid, setShowGrid] = useState(true);
   const [showDimensions, setShowDimensions] = useState(true);
   const [palmRejection, setPalmRejection] = useState(false); // Pen only
+
+  // Zoom & Pan State
+  const [zoomLevel, setZoomLevel] = useState(1.0);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [panMode, setPanMode] = useState(false); // PAN tool aktif
 
   // Elements & History
   const [elements, setElements] = useState<SketchElement[]>([]);
@@ -174,6 +187,8 @@ export default function SketchStudioTab({
     setHistory([]);
     setHistoryIndex(-1);
     setBgImage(null);
+    setZoomLevel(1.0);
+    setPanOffset({ x: 0, y: 0 });
     setIsStudioOpen(true);
   };
 
@@ -197,6 +212,8 @@ export default function SketchStudioTab({
     setElements(parsedElements);
     setHistory([parsedElements]);
     setHistoryIndex(0);
+    setZoomLevel(1.0);
+    setPanOffset({ x: 0, y: 0 });
     setIsStudioOpen(true);
   };
 
@@ -281,25 +298,32 @@ export default function SketchStudioTab({
     // Bersihkan canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // Fill background (di luar transform zoom/pan)
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Terapkan transformasi Zoom & Pan
+    ctx.save();
+    ctx.translate(panOffset.x, panOffset.y);
+    ctx.scale(zoomLevel, zoomLevel);
+
     // 1. Gambar Background Foto Lapangan (jika ada)
     if (bgImage) {
       ctx.save();
       ctx.globalAlpha = bgOpacity;
       // Gambar proporsional di tengah
+      const canvasW = canvas.width / zoomLevel;
+      const canvasH = canvas.height / zoomLevel;
       const ratio = Math.min(
-        canvas.width / bgImage.width,
-        canvas.height / bgImage.height
+        canvasW / bgImage.width,
+        canvasH / bgImage.height
       );
       const w = bgImage.width * ratio;
       const h = bgImage.height * ratio;
-      const x = (canvas.width - w) / 2;
-      const y = (canvas.height - h) / 2;
+      const x = (canvasW - w) / 2;
+      const y = (canvasH - h) / 2;
       ctx.drawImage(bgImage, x, y, w, h);
       ctx.restore();
-    } else {
-      // Warna background putih bersih
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
     // 2. Gambar Grid Milimeter / Kotak Arsitek
@@ -308,45 +332,67 @@ export default function SketchStudioTab({
       const step = DEFAULT_GRID_SIZE;
       const subStep = step / 2; // Kotak kecil 0.5m
 
+      // Hitung batas grid yang terlihat berdasarkan zoom/pan
+      const visibleStartX = -panOffset.x / zoomLevel;
+      const visibleStartY = -panOffset.y / zoomLevel;
+      const visibleEndX = visibleStartX + canvas.width / zoomLevel;
+      const visibleEndY = visibleStartY + canvas.height / zoomLevel;
+
+      const gridStartX = Math.floor(visibleStartX / subStep) * subStep;
+      const gridStartY = Math.floor(visibleStartY / subStep) * subStep;
+      const gridEndX = Math.ceil(visibleEndX / subStep) * subStep;
+      const gridEndY = Math.ceil(visibleEndY / subStep) * subStep;
+
       // Sub-grid tipis
       ctx.beginPath();
       ctx.strokeStyle = "#f1f5f9"; // slate-100
-      ctx.lineWidth = 1;
-      for (let x = 0; x <= canvas.width; x += subStep) {
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, canvas.height);
+      ctx.lineWidth = 1 / zoomLevel;
+      for (let x = gridStartX; x <= gridEndX; x += subStep) {
+        ctx.moveTo(x, gridStartY);
+        ctx.lineTo(x, gridEndY);
       }
-      for (let y = 0; y <= canvas.height; y += subStep) {
-        ctx.moveTo(0, y);
-        ctx.lineTo(canvas.width, y);
+      for (let y = gridStartY; y <= gridEndY; y += subStep) {
+        ctx.moveTo(gridStartX, y);
+        ctx.lineTo(gridEndX, y);
       }
       ctx.stroke();
 
       // Main grid (tiap 1 meter)
+      const mainStartX = Math.floor(visibleStartX / step) * step;
+      const mainStartY = Math.floor(visibleStartY / step) * step;
+      const mainEndX = Math.ceil(visibleEndX / step) * step;
+      const mainEndY = Math.ceil(visibleEndY / step) * step;
+
       ctx.beginPath();
       ctx.strokeStyle = "#e2e8f0"; // slate-200
-      ctx.lineWidth = 1.2;
-      for (let x = 0; x <= canvas.width; x += step) {
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, canvas.height);
+      ctx.lineWidth = 1.2 / zoomLevel;
+      for (let x = mainStartX; x <= mainEndX; x += step) {
+        ctx.moveTo(x, mainStartY);
+        ctx.lineTo(x, mainEndY);
       }
-      for (let y = 0; y <= canvas.height; y += step) {
-        ctx.moveTo(0, y);
-        ctx.lineTo(canvas.width, y);
+      for (let y = mainStartY; y <= mainEndY; y += step) {
+        ctx.moveTo(mainStartX, y);
+        ctx.lineTo(mainEndX, y);
       }
       ctx.stroke();
 
       // Major grid (tiap 5 meter) - lebih kontras
+      const majorStep = step * 5;
+      const majorStartX = Math.floor(visibleStartX / majorStep) * majorStep;
+      const majorStartY = Math.floor(visibleStartY / majorStep) * majorStep;
+      const majorEndX = Math.ceil(visibleEndX / majorStep) * majorStep;
+      const majorEndY = Math.ceil(visibleEndY / majorStep) * majorStep;
+
       ctx.beginPath();
       ctx.strokeStyle = "#cbd5e1"; // slate-300
-      ctx.lineWidth = 1.5;
-      for (let x = 0; x <= canvas.width; x += step * 5) {
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, canvas.height);
+      ctx.lineWidth = 1.5 / zoomLevel;
+      for (let x = majorStartX; x <= majorEndX; x += majorStep) {
+        ctx.moveTo(x, majorStartY);
+        ctx.lineTo(x, majorEndY);
       }
-      for (let y = 0; y <= canvas.height; y += step * 5) {
-        ctx.moveTo(0, y);
-        ctx.lineTo(canvas.width, y);
+      for (let y = majorStartY; y <= majorEndY; y += majorStep) {
+        ctx.moveTo(majorStartX, y);
+        ctx.lineTo(majorEndX, y);
       }
       ctx.stroke();
       ctx.restore();
@@ -560,6 +606,46 @@ export default function SketchStudioTab({
         ctx.stroke();
       }
 
+      // --- ARROW (Garis Penunjuk / Pointer Panah) ---
+      else if (el.type === "ARROW") {
+        const arrowColor = el.color || "#ef4444";
+        const lineW = el.strokeWidth || 2.5;
+        ctx.strokeStyle = arrowColor;
+        ctx.fillStyle = arrowColor;
+        ctx.lineWidth = lineW;
+        ctx.lineCap = "round";
+
+        // Garis utama
+        ctx.beginPath();
+        ctx.moveTo(el.x1, el.y1);
+        ctx.lineTo(el.x2, el.y2);
+        ctx.stroke();
+
+        // Kepala Panah (Segitiga di ujung x2, y2)
+        const angle = Math.atan2(el.y2 - el.y1, el.x2 - el.x1);
+        const headLen = Math.max(12, lineW * 4);
+        ctx.save();
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(el.x2, el.y2);
+        ctx.lineTo(
+          el.x2 - headLen * Math.cos(angle - Math.PI / 6),
+          el.y2 - headLen * Math.sin(angle - Math.PI / 6)
+        );
+        ctx.lineTo(
+          el.x2 - headLen * Math.cos(angle + Math.PI / 6),
+          el.y2 - headLen * Math.sin(angle + Math.PI / 6)
+        );
+        ctx.closePath();
+        ctx.fill();
+
+        // Titik pangkal kecil
+        ctx.beginPath();
+        ctx.arc(el.x1, el.y1, lineW * 1.1, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
       // --- FREEHAND (Coretan Bebas / Stylus Pen) ---
       else if (el.type === "FREEHAND" && el.points && el.points.length > 1) {
         ctx.strokeStyle = el.color || "#ef4444";
@@ -574,30 +660,31 @@ export default function SketchStudioTab({
         ctx.stroke();
       }
 
-      // --- TEXT (Catatan Nama Ruangan) ---
+      // --- TEXT (Catatan Nama Ruangan + Support Rotasi) ---
       else if (el.type === "TEXT" && el.text) {
         const fSize = el.strokeWidth || 14;
         ctx.font = `bold ${fSize}px system-ui, sans-serif`;
         const textWidth = ctx.measureText(el.text).width;
         const boxHeight = fSize + 8;
+        const rotDeg = el.rotation || 0;
+        const isSelected =
+          draggingTextId === el.id || selectedTextId === el.id;
+
+        ctx.save();
+        ctx.translate(el.x1, el.y1);
+        if (rotDeg) {
+          ctx.rotate((rotDeg * Math.PI) / 180);
+        }
+
         ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
-        ctx.fillRect(
-          el.x1 - 6,
-          el.y1 - boxHeight / 2,
-          textWidth + 12,
-          boxHeight
-        );
-        ctx.strokeStyle = draggingTextId === el.id ? "#f59e0b" : "#cbd5e1";
-        ctx.lineWidth = draggingTextId === el.id ? 2 : 1;
-        ctx.strokeRect(
-          el.x1 - 6,
-          el.y1 - boxHeight / 2,
-          textWidth + 12,
-          boxHeight
-        );
+        ctx.fillRect(-6, -boxHeight / 2, textWidth + 12, boxHeight);
+        ctx.strokeStyle = isSelected ? "#f59e0b" : "#cbd5e1";
+        ctx.lineWidth = isSelected ? 2 : 1;
+        ctx.strokeRect(-6, -boxHeight / 2, textWidth + 12, boxHeight);
         ctx.fillStyle = el.color || "#0f172a";
         ctx.textBaseline = "middle";
-        ctx.fillText(el.text, el.x1, el.y1);
+        ctx.fillText(el.text, 0, 0);
+        ctx.restore();
       }
 
       ctx.restore();
@@ -609,7 +696,7 @@ export default function SketchStudioTab({
       .filter((el) => el.type === "WALL")
       .forEach((el) => renderElement(el, false));
 
-    // PASS 2: Render Pintu, Jendela (yang melubangi dinding), Dimensi, Stylus, dan Teks
+    // PASS 2: Render Pintu, Jendela (yang melubangi dinding), Dimensi, Panah, Stylus, dan Teks
     elements
       .filter((el) => el.type !== "WALL")
       .forEach((el) => renderElement(el, false));
@@ -618,6 +705,9 @@ export default function SketchStudioTab({
     if (currentElement) {
       renderElement(currentElement, true);
     }
+
+    // Tutup transformasi Zoom & Pan
+    ctx.restore();
   }, [
     bgImage,
     bgOpacity,
@@ -627,6 +717,9 @@ export default function SketchStudioTab({
     showDimensions,
     scaleMeters,
     draggingTextId,
+    selectedTextId,
+    zoomLevel,
+    panOffset,
   ]);
 
   // Efek gambar ulang setiap ada perubahan
@@ -657,23 +750,79 @@ export default function SketchStudioTab({
     return () => window.removeEventListener("resize", handleResize);
   }, [isStudioOpen, isFullscreen, redrawCanvas]);
 
-  // Get Canvas Pointer Coordinates
+  // Get Canvas Pointer Coordinates (Memperhitungkan Zoom & Pan)
   const getCoordinates = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    const clientX = e.clientX;
-    const clientY = e.clientY;
+    const rawX = (e.clientX - rect.left) * scaleX;
+    const rawY = (e.clientY - rect.top) * scaleY;
     return {
-      x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY,
+      x: (rawX - panOffset.x) / zoomLevel,
+      y: (rawY - panOffset.y) / zoomLevel,
     };
   };
 
-  // POINTER DOWN (Mulai Menggambar / Geser Teks / Hapus)
+  // Helper Cek Apakah Titik Mengenai Teks (Support Rotasi 0, 90, 180, 270)
+  const isPointInText = (el: SketchElement, px: number, py: number) => {
+    if (el.type !== "TEXT" || !el.text) return false;
+    const fSize = el.strokeWidth || 14;
+    const approxW = el.text.length * (fSize * 0.7) + 18;
+    const boxH = fSize + 14;
+    const rot = ((el.rotation || 0) * Math.PI) / 180;
+    const dx = px - el.x1;
+    const dy = py - el.y1;
+    // Transform titik ke koordinat lokal teks
+    const localX = dx * Math.cos(-rot) - dy * Math.sin(-rot);
+    const localY = dx * Math.sin(-rot) + dy * Math.cos(-rot);
+    return (
+      localX >= -10 &&
+      localX <= approxW &&
+      localY >= -boxH / 2 &&
+      localY <= boxH / 2
+    );
+  };
+
+  // Fungsi Putar Teks 90 Derajat
+  const handleRotateSelectedText = () => {
+    const targetId = selectedTextId || draggingTextId;
+    if (!targetId) {
+      toast.info("Sentuh/klik teks di kanvas terlebih dahulu untuk memutarnya.");
+      return;
+    }
+    const next = elements.map((el) => {
+      if (el.id !== targetId || el.type !== "TEXT") return el;
+      const nextRot = ((el.rotation || 0) + 90) % 360;
+      return { ...el, rotation: nextRot };
+    });
+    setElements(next);
+    pushToHistory(next);
+  };
+
+  // Fungsi Zoom In / Out / Reset
+  const handleZoom = (delta: number) => {
+    setZoomLevel((prev) => {
+      const next = Math.min(3.0, Math.max(0.3, Number((prev + delta).toFixed(2))));
+      return next;
+    });
+  };
+
+  const handleResetView = () => {
+    setZoomLevel(1.0);
+    setPanOffset({ x: 0, y: 0 });
+  };
+
+  // POINTER DOWN (Mulai Menggambar / Geser Kanvas / Geser Teks / Hapus)
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    // Mode Geser Kanvas (Pan Mode) atau Klik Tengah Mouse
+    if (panMode || e.button === 1) {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+      return;
+    }
+
     // Palm Rejection: Jika diaktifkan, hanya respons stylus/pen atau mouse
     if (palmRejection && e.pointerType === "touch") {
       return;
@@ -682,22 +831,11 @@ export default function SketchStudioTab({
     const { x, y } = getCoordinates(e);
 
     // Deteksi apakah klik mengenai teks yang sudah ada
-    const touchedText = elements.find((el) => {
-      if (el.type !== "TEXT" || !el.text) return false;
-      const fSize = el.strokeWidth || 14;
-      const approxW = el.text.length * (fSize * 0.7) + 16;
-      const boxH = fSize + 12;
-      return (
-        x >= el.x1 - 8 &&
-        x <= el.x1 + approxW &&
-        y >= el.y1 - boxH / 2 &&
-        y <= el.y1 + boxH / 2
-      );
-    });
+    const touchedText = elements.find((el) => isPointInText(el, x, y));
 
-    // MODE ERASER: Hapus elemen terdekat (Stylus, Teks, Dinding, Pintu, dll)
+    // MODE ERASER: Hapus elemen terdekat (Stylus, Teks, Dinding, Panah, Pintu, dll)
     if (activeTool === "ERASER") {
-      const clickRadius = 22;
+      const clickRadius = 22 / zoomLevel;
       const filtered = elements.filter((el) => {
         // A. Cek FREEHAND (Coretan Stylus): Cek ke SETIAP titik di sepanjang coretan
         if (el.type === "FREEHAND" && el.points && el.points.length > 0) {
@@ -709,18 +847,10 @@ export default function SketchStudioTab({
 
         // B. Cek TEXT: Cek apakah klik berada di dalam kotak teks
         if (el.type === "TEXT" && el.text) {
-          const fSize = el.strokeWidth || 14;
-          const approxW = el.text.length * (fSize * 0.7) + 16;
-          const boxH = fSize + 12;
-          const inBox =
-            x >= el.x1 - 8 &&
-            x <= el.x1 + approxW &&
-            y >= el.y1 - boxH / 2 &&
-            y <= el.y1 + boxH / 2;
-          return !inBox;
+          return !isPointInText(el, x, y);
         }
 
-        // C. Cek WALL, RULER, DOOR, WINDOW: Jarak ke titik ujung, tengah, atau segmen garis
+        // C. Cek WALL, RULER, DOOR, WINDOW, ARROW: Jarak ke titik ujung, tengah, atau segmen garis
         const d1 = Math.hypot(el.x1 - x, el.y1 - y);
         const d2 = Math.hypot(el.x2 - x, el.y2 - y);
         const midX = (el.x1 + el.x2) / 2;
@@ -758,20 +888,24 @@ export default function SketchStudioTab({
       return;
     }
 
-    // Jika menyentuh teks (dan bukan penghapus): Masuk mode geser teks (DRAG & MOVE)
+    // Jika menyentuh teks (dan bukan penghapus): Pilih & Masuk mode geser teks (DRAG & MOVE)
     if (touchedText) {
+      setSelectedTextId(touchedText.id);
       setDraggingTextId(touchedText.id);
       setDragOffset({ x: x - touchedText.x1, y: y - touchedText.y1 });
       setIsDrawing(false);
       return;
+    } else {
+      setSelectedTextId(null);
     }
 
     // MODE TEXT: Tambah teks baru saat klik area kosong
     if (activeTool === "TEXT") {
       const text = prompt("Masukkan Catatan / Nama Ruangan:", "Kamar Utama");
       if (text && text.trim()) {
+        const newId = `el-${Date.now()}`;
         const newTextEl: SketchElement = {
-          id: `el-${Date.now()}`,
+          id: newId,
           type: "TEXT",
           x1: x,
           y1: y,
@@ -780,9 +914,11 @@ export default function SketchStudioTab({
           text: text.trim(),
           color: activeColor,
           strokeWidth: textFontSize, // Ukuran font disimpan di strokeWidth (11, 14, 18)
+          rotation: 0,
         };
         const next = [...elements, newTextEl];
         setElements(next);
+        setSelectedTextId(newId);
         pushToHistory(next);
       }
       return;
@@ -805,7 +941,7 @@ export default function SketchStudioTab({
       return;
     }
 
-    // MODE WALL, RULER, DOOR, WINDOW
+    // MODE WALL, RULER, DOOR, WINDOW, ARROW
     const snappedX = snap(x);
     const snappedY = snap(y);
 
@@ -818,12 +954,23 @@ export default function SketchStudioTab({
       x2: snappedX,
       y2: snappedY,
       color: activeColor,
-      strokeWidth: strokeWidth,
+      strokeWidth: activeTool === "ARROW" ? 2.5 : strokeWidth,
     });
   };
 
-  // POINTER MOVE (Sedang Menggeser Garis / Geser Teks)
+  // POINTER MOVE (Sedang Menggeser Kanvas / Garis / Teks)
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (isPanning) {
+      const canvas = canvasRef.current;
+      const scaleX = canvas ? canvas.width / canvas.getBoundingClientRect().width : 1;
+      const scaleY = canvas ? canvas.height / canvas.getBoundingClientRect().height : 1;
+      setPanOffset({
+        x: (e.clientX - panStart.x) * scaleX,
+        y: (e.clientY - panStart.y) * scaleY,
+      });
+      return;
+    }
+
     if (palmRejection && e.pointerType === "touch") return;
 
     const { x, y } = getCoordinates(e);
@@ -852,11 +999,15 @@ export default function SketchStudioTab({
       return;
     }
 
-    // Mode Wall / Ruler: Gunakan snap grid dan snap orthogonal
+    // Mode Wall / Ruler / Arrow: Gunakan snap grid dan snap orthogonal
     let targetX = snap(x);
     let targetY = snap(y);
 
-    if (currentElement.type === "WALL" || currentElement.type === "RULER") {
+    if (
+      currentElement.type === "WALL" ||
+      currentElement.type === "RULER" ||
+      currentElement.type === "ARROW"
+    ) {
       const snapped = snapAngle(
         currentElement.x1,
         currentElement.y1,
@@ -873,8 +1024,13 @@ export default function SketchStudioTab({
     });
   };
 
-  // POINTER UP (Selesai Menggambar / Selesai Geser Teks)
+  // POINTER UP (Selesai Menggambar / Selesai Geser Kanvas / Teks)
   const handlePointerUp = () => {
+    if (isPanning) {
+      setIsPanning(false);
+      return;
+    }
+
     if (draggingTextId) {
       setDraggingTextId(null);
       pushToHistory(elements);
@@ -1234,9 +1390,12 @@ export default function SketchStudioTab({
               <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
                 <button
                   type="button"
-                  onClick={() => setActiveTool("WALL")}
+                  onClick={() => {
+                    setActiveTool("WALL");
+                    setPanMode(false);
+                  }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
-                    activeTool === "WALL"
+                    activeTool === "WALL" && !panMode
                       ? "bg-slate-900 text-white shadow-sm"
                       : "text-slate-700 hover:bg-slate-100"
                   }`}
@@ -1248,9 +1407,12 @@ export default function SketchStudioTab({
 
                 <button
                   type="button"
-                  onClick={() => setActiveTool("RULER")}
+                  onClick={() => {
+                    setActiveTool("RULER");
+                    setPanMode(false);
+                  }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
-                    activeTool === "RULER"
+                    activeTool === "RULER" && !panMode
                       ? "bg-slate-900 text-white shadow-sm"
                       : "text-slate-700 hover:bg-slate-100"
                   }`}
@@ -1262,9 +1424,12 @@ export default function SketchStudioTab({
 
                 <button
                   type="button"
-                  onClick={() => setActiveTool("DOOR")}
+                  onClick={() => {
+                    setActiveTool("DOOR");
+                    setPanMode(false);
+                  }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
-                    activeTool === "DOOR"
+                    activeTool === "DOOR" && !panMode
                       ? "bg-slate-900 text-white shadow-sm"
                       : "text-slate-700 hover:bg-slate-100"
                   }`}
@@ -1276,9 +1441,12 @@ export default function SketchStudioTab({
 
                 <button
                   type="button"
-                  onClick={() => setActiveTool("WINDOW")}
+                  onClick={() => {
+                    setActiveTool("WINDOW");
+                    setPanMode(false);
+                  }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
-                    activeTool === "WINDOW"
+                    activeTool === "WINDOW" && !panMode
                       ? "bg-slate-900 text-white shadow-sm"
                       : "text-slate-700 hover:bg-slate-100"
                   }`}
@@ -1290,9 +1458,29 @@ export default function SketchStudioTab({
 
                 <button
                   type="button"
-                  onClick={() => setActiveTool("FREEHAND")}
+                  onClick={() => {
+                    setActiveTool("ARROW");
+                    setPanMode(false);
+                  }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
-                    activeTool === "FREEHAND"
+                    activeTool === "ARROW" && !panMode
+                      ? "bg-slate-900 text-white shadow-sm"
+                      : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                  title="Garis Panah Penunjuk Area / Catatan"
+                >
+                  <ArrowUpRight className="w-3.5 h-3.5 text-orange-400" />
+                  <span>Panah</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTool("FREEHAND");
+                    setPanMode(false);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+                    activeTool === "FREEHAND" && !panMode
                       ? "bg-slate-900 text-white shadow-sm"
                       : "text-slate-700 hover:bg-slate-100"
                   }`}
@@ -1304,9 +1492,12 @@ export default function SketchStudioTab({
 
                 <button
                   type="button"
-                  onClick={() => setActiveTool("TEXT")}
+                  onClick={() => {
+                    setActiveTool("TEXT");
+                    setPanMode(false);
+                  }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
-                    activeTool === "TEXT"
+                    activeTool === "TEXT" && !panMode
                       ? "bg-slate-900 text-white shadow-sm"
                       : "text-slate-700 hover:bg-slate-100"
                   }`}
@@ -1318,9 +1509,12 @@ export default function SketchStudioTab({
 
                 <button
                   type="button"
-                  onClick={() => setActiveTool("ERASER")}
+                  onClick={() => {
+                    setActiveTool("ERASER");
+                    setPanMode(false);
+                  }}
                   className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition ${
-                    activeTool === "ERASER"
+                    activeTool === "ERASER" && !panMode
                       ? "bg-rose-600 text-white shadow-sm"
                       : "text-rose-600 hover:bg-rose-50"
                   }`}
@@ -1394,8 +1588,8 @@ export default function SketchStudioTab({
                   </button>
                 </div>
 
-                {/* Ukuran Teks (Hanya tampil saat mode TEXT aktif) */}
-                {activeTool === "TEXT" && (
+                {/* Ukuran Teks & Putar 90 Derajat (Tampil saat mode TEXT aktif atau ada teks terpilih) */}
+                {(activeTool === "TEXT" || selectedTextId) && (
                   <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 text-xs animate-in fade-in">
                     <span className="text-[10px] text-slate-400 font-bold px-1">
                       Font:
@@ -1436,8 +1630,69 @@ export default function SketchStudioTab({
                     >
                       L
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={handleRotateSelectedText}
+                      className="ml-1 px-2 py-0.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[11px] flex items-center gap-1 transition"
+                      title="Putar Teks 90 Derajat (Klik teks dulu lalu klik tombol ini)"
+                    >
+                      <RotateCw className="w-3 h-3" />
+                      <span>Putar 90°</span>
+                    </button>
                   </div>
                 )}
+
+                {/* Zoom & Pan (Geser Kanvas Luas) */}
+                <div className="flex items-center gap-0.5 bg-white p-1 rounded-xl border border-slate-200 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setPanMode(!panMode)}
+                    className={`px-2 py-1 rounded-lg font-bold text-[11px] flex items-center gap-1 transition ${
+                      panMode
+                        ? "bg-amber-500 text-slate-950 shadow-sm"
+                        : "text-slate-700 hover:bg-slate-100"
+                    }`}
+                    title="Mode Geser Kanvas (Pan) untuk melihat area denah yang luas"
+                  >
+                    <Move className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Geser</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleZoom(-0.2)}
+                    className="p-1 rounded-lg text-slate-700 hover:bg-slate-100"
+                    title="Perkecil Kanvas (Zoom Out)"
+                  >
+                    <ZoomOut className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResetView}
+                    className="px-1.5 py-0.5 rounded text-[11px] font-mono font-bold text-slate-700 hover:bg-slate-100"
+                    title="Reset Zoom ke 100%"
+                  >
+                    {Math.round(zoomLevel * 100)}%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleZoom(0.2)}
+                    className="p-1 rounded-lg text-slate-700 hover:bg-slate-100"
+                    title="Perbesar Kanvas (Zoom In)"
+                  >
+                    <ZoomIn className="w-3.5 h-3.5" />
+                  </button>
+                  {(zoomLevel !== 1 || panOffset.x !== 0 || panOffset.y !== 0) && (
+                    <button
+                      type="button"
+                      onClick={handleResetView}
+                      className="p-1 rounded-lg text-amber-600 hover:bg-amber-50"
+                      title="Kembalikan Posisi Tengah (Reset View)"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
 
                 {/* Undo / Redo */}
                 <div className="flex items-center gap-0.5 bg-white p-1 rounded-xl border border-slate-200">
@@ -1570,7 +1825,13 @@ export default function SketchStudioTab({
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
-                className="bg-white shadow-xl rounded-xl cursor-crosshair touch-none"
+                onWheel={(e) => {
+                  e.preventDefault();
+                  handleZoom(e.deltaY < 0 ? 0.1 : -0.1);
+                }}
+                className={`bg-white shadow-xl rounded-xl touch-none ${
+                  panMode ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"
+                }`}
                 style={{
                   touchAction: "none", // Cegah scrolling browser saat stylus/jari menggambar
                 }}
@@ -1579,7 +1840,11 @@ export default function SketchStudioTab({
               {/* Status Bar / Helper di Pojok Bawah Canvas */}
               <div className="absolute bottom-4 left-6 bg-slate-900/80 backdrop-blur-sm text-white px-3 py-1.5 rounded-xl text-[11px] flex items-center gap-3 shadow pointer-events-none">
                 <span className="flex items-center gap-1 text-amber-400 font-bold">
-                  Tool: {activeTool}
+                  Tool: {panMode ? "GESER KANVAS (PAN)" : activeTool}
+                </span>
+                <span className="text-slate-400">•</span>
+                <span>
+                  Zoom: <strong>{Math.round(zoomLevel * 100)}%</strong>
                 </span>
                 <span className="text-slate-400">•</span>
                 <span>
