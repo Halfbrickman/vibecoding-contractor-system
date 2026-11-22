@@ -128,6 +128,12 @@ export default async function HomePage() {
             <a href="#kalkulator" className="hover:text-amber-400 transition">
               Simulasi Biaya
             </a>
+            <Link
+              href="/kalkulator"
+              className="text-amber-400 hover:text-amber-300 font-bold transition flex items-center gap-1"
+            >
+              <span>Kalkulator Material</span>
+            </Link>
           </nav>
 
           <div className="flex items-center gap-3">
@@ -170,6 +176,12 @@ export default async function HomePage() {
                   <span>Hitung Estimasi Biaya</span>
                   <ArrowRight className="w-4 h-4" />
                 </a>
+                <Link
+                  href="/kalkulator"
+                  className="bg-slate-900 hover:bg-slate-800 text-amber-400 font-bold px-6 py-4 rounded-xl border border-amber-500/40 transition flex items-center gap-2"
+                >
+                  <span>Kalkulator Material SNI</span>
+                </Link>
                 <a
                   href="#portfolio"
                   className="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-6 py-4 rounded-xl border border-slate-700 transition"
