@@ -115,7 +115,7 @@ export default async function HomePage() {
             </div>
           </div>
 
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
+          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-300 whitespace-nowrap">
             <a href="#keunggulan" className="hover:text-amber-400 transition">
               Workflow Kerja
             </a>
@@ -128,22 +128,16 @@ export default async function HomePage() {
             <a href="#kalkulator" className="hover:text-amber-400 transition">
               Simulasi Biaya
             </a>
-            <Link
-              href="/kalkulator"
-              className="text-amber-400 hover:text-amber-300 font-bold transition flex items-center gap-1"
-            >
-              <span>Kalkulator Material</span>
-            </Link>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             <a
               href={`https://wa.me/${waNumber.replace(/\D/g, "")}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 transition shadow"
+              className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 transition shadow whitespace-nowrap"
             >
-              <PhoneCall className="w-4 h-4" />
+              <PhoneCall className="w-4 h-4 shrink-0" />
               <span>Konsultasi WhatsApp</span>
             </a>
           </div>
@@ -176,12 +170,6 @@ export default async function HomePage() {
                   <span>Hitung Estimasi Biaya</span>
                   <ArrowRight className="w-4 h-4" />
                 </a>
-                <Link
-                  href="/kalkulator"
-                  className="bg-slate-900 hover:bg-slate-800 text-amber-400 font-bold px-6 py-4 rounded-xl border border-amber-500/40 transition flex items-center gap-2"
-                >
-                  <span>Kalkulator Material SNI</span>
-                </Link>
                 <a
                   href="#portfolio"
                   className="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-6 py-4 rounded-xl border border-slate-700 transition"
@@ -377,7 +365,7 @@ export default async function HomePage() {
 
       {/* Kalkulator Estimasi Biaya */}
       <section id="kalkulator" className="py-20 bg-slate-100 border-t border-slate-200">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
           <CostCalculator
             whatsappNumber={waNumber}
             prices={{
@@ -387,6 +375,32 @@ export default async function HomePage() {
               kontrakan: Number(profile?.priceKontrakanPerM2 ?? 3200000),
             }}
           />
+
+          {/* Banner Pintasan ke Kalkulator Material SNI */}
+          <div className="bg-slate-950 text-white rounded-3xl p-6 sm:p-8 border border-slate-800 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+            <div className="space-y-1.5">
+              <div className="inline-flex items-center gap-1.5 text-amber-400 text-xs font-bold uppercase tracking-wider">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Fitur Baru • Standar Koefisien SNI</span>
+              </div>
+              <h3 className="text-lg sm:text-xl font-extrabold text-white">
+                Ingin Hitung Detail Kebutuhan Material Bangunan?
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-400 max-w-xl leading-relaxed">
+                Hitung mandiri kebutuhan Bata Ringan (Hebel), Sak Semen, Dus
+                Keramik, Cat Tembok, Kubikasi Cor Beton, Rangka Baja Ringan,
+                hingga Besi Beton.
+              </p>
+            </div>
+
+            <Link
+              href="/kalkulator"
+              className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs sm:text-sm px-5 py-3.5 rounded-xl flex items-center justify-center gap-2 transition shadow shrink-0 whitespace-nowrap"
+            >
+              <span>Buka Kalkulator Material SNI</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -398,6 +412,9 @@ export default async function HomePage() {
             <span>{profile?.address ?? "Indonesia"}</span>
           </div>
           <div className="flex items-center gap-6 text-xs">
+            <Link href="/kalkulator" className="text-slate-400 hover:text-amber-400 transition">
+              Kalkulator Material SNI
+            </Link>
             <Link href="/admin" className="text-slate-500 hover:text-amber-400 transition">
               Portal Admin
             </Link>
