@@ -51,7 +51,7 @@ export default function Media3DTab({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "ADD_MEDIA",
-        title: mediaTitle || rawFile.name,
+        title: mediaTitle.trim() || roomName || "Visualisasi Proyek",
         mediaType,
         roomName,
         fileUrl,

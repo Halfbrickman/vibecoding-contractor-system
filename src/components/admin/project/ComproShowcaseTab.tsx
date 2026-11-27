@@ -29,8 +29,8 @@ export default function ComproShowcaseTab({
   const [status, setStatus] = useState(project.status || "ON_PROGRESS");
   const [landArea, setLandArea] = useState(project.landArea || 0);
   const [buildingArea, setBuildingArea] = useState(project.buildingArea || 0);
-  const [floors, setFloors] = useState(project.floors || 1);
-  const [unitsCount, setUnitsCount] = useState(project.unitsCount || 1);
+  const [floors, setFloors] = useState(project.floors ?? 1);
+  const [unitsCount, setUnitsCount] = useState(project.unitsCount ?? 0);
   const [description, setDescription] = useState(project.description || "");
   const [isPublished, setIsPublished] = useState(Boolean(project.isPublished));
   const [isFeatured, setIsFeatured] = useState(Boolean(project.isFeatured));
@@ -303,6 +303,7 @@ export default function ComproShowcaseTab({
               <option value="BANGUN_BARU">BANGUN BARU</option>
               <option value="KONTRAKAN">KONTRAKAN</option>
               <option value="INTERIOR">INTERIOR</option>
+              <option value="EKSTERIOR">EKSTERIOR / LANDSCAPE</option>
             </select>
           </div>
           <div>

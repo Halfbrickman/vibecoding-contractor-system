@@ -89,7 +89,7 @@ model Project {
   landArea          Float?        // Luas Tanah (m2)
   buildingArea      Float?        // Luas Bangunan (m2)
   floors            Int           @default(1)
-  unitsCount        Int           @default(1) // Jumlah Pintu (khusus proyek Kontrakan)
+  unitsCount        Int           @default(0) // Jumlah Pintu (khusus proyek Kontrakan)
 
   // Waktu & Nilai Kontrak
   startDate         DateTime?
@@ -126,6 +126,7 @@ enum ProjectType {
   BANGUN_BARU
   KONTRAKAN
   INTERIOR
+  EKSTERIOR
 }
 
 enum ProjectStatus {

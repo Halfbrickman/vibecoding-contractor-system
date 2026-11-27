@@ -9,15 +9,15 @@ export const loginSchema = z.object({
 // 2. Validasi Pembuatan Proyek Baru
 export const projectCreateSchema = z.object({
   title: z.string().min(3, "Nama proyek minimal 3 karakter").max(150),
-  type: z.enum(["RENOVASI", "BANGUN_BARU", "KONTRAKAN", "INTERIOR"]).default("BANGUN_BARU"),
+  type: z.enum(["RENOVASI", "BANGUN_BARU", "KONTRAKAN", "INTERIOR", "EKSTERIOR"]).default("BANGUN_BARU"),
   status: z.enum(["PLANNING", "ON_PROGRESS", "COMPLETED", "ON_HOLD"]).default("PLANNING"),
   location: z.string().max(200).optional().nullable(),
   clientName: z.string().max(120).optional().nullable(),
   clientPhone: z.string().max(30).optional().nullable(),
   landArea: z.coerce.number().min(0, "Luas tanah tidak boleh negatif").default(0),
   buildingArea: z.coerce.number().min(0, "Luas bangunan tidak boleh negatif").default(0),
-  floors: z.coerce.number().int().min(1, "Minimal 1 lantai").max(50).default(1),
-  unitsCount: z.coerce.number().int().min(1, "Minimal 1 pintu/unit").max(200).default(1),
+  floors: z.coerce.number().int().min(0, "Jumlah lantai tidak boleh negatif").max(50).default(1),
+  unitsCount: z.coerce.number().int().min(0, "Jumlah pintu tidak boleh negatif").max(200).default(0),
   contractValue: z.coerce.number().min(0).default(0),
   description: z.string().optional().nullable(),
   isPublished: z.boolean().default(true),

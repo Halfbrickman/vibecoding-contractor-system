@@ -52,8 +52,8 @@ export default function AdminDashboardPage() {
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [buildingArea, setBuildingArea] = useState(100);
-  const [floors, setFloors] = useState(2);
-  const [unitsCount, setUnitsCount] = useState(1);
+  const [floors, setFloors] = useState(1);
+  const [unitsCount, setUnitsCount] = useState(0);
 
   const fetchProjects = async () => {
     setLoading(true);
@@ -82,7 +82,7 @@ export default function AdminDashboardPage() {
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch("/api/projects", {
+    const res = await fetch("/api/projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -97,6 +97,11 @@ export default function AdminDashboardPage() {
         isPublished: true,
       }),
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error || "Gagal membuat proyek baru.");
+      return;
+    }
     setShowModal(false);
     setTitle("");
     toast.success("Proyek baru berhasil dibuat!");
@@ -223,6 +228,7 @@ export default function AdminDashboardPage() {
               <option value="BANGUN_BARU">Bangun Baru</option>
               <option value="KONTRAKAN">Kontrakan</option>
               <option value="INTERIOR">Interior</option>
+              <option value="EKSTERIOR">Eksterior / Landscape</option>
             </select>
           </div>
         </div>
@@ -391,6 +397,7 @@ export default function AdminDashboardPage() {
                   <option value="BANGUN_BARU">Bangun Rumah Baru</option>
                   <option value="KONTRAKAN">Bangun Kontrakan</option>
                   <option value="INTERIOR">Interior</option>
+                  <option value="EKSTERIOR">Eksterior / Landscape</option>
                 </select>
               </div>
               <div>
@@ -463,8 +470,9 @@ export default function AdminDashboardPage() {
                 </label>
                 <input
                   type="number"
+                  min={0}
                   value={unitsCount}
-                  onChange={(e) => setUnitsCount(Number(e.target.value))}
+                  onChange={(e) => setUnitsCount(Math.max(0, Number(e.target.value)))}
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm"
                 />
               </div>

@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { formatRupiah } from "@/lib/format";
-import PanoramaViewerModal from "@/components/PanoramaViewerModal";
+import ProjectMediaGallery from "@/components/ProjectMediaGallery";
 
 export const dynamic = "force-dynamic";
 
@@ -119,41 +119,7 @@ export default async function ClientPortalPage({
               Belum ada file render yang diunggah untuk proyek ini.
             </p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {project.media.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex flex-col"
-                >
-                  <div className="relative h-64 bg-slate-900">
-                    <img
-                      src={item.fileUrl}
-                      alt={item.title || "Render 3D"}
-                      className="w-full h-full object-cover"
-                    />
-                    <span className="absolute top-3 left-3 bg-slate-950/80 text-amber-400 text-[11px] font-bold px-2.5 py-1 rounded-md">
-                      {item.mediaType.replace("_", " ")}
-                    </span>
-                  </div>
-                  <div className="p-4 flex items-center justify-between gap-4">
-                    <div>
-                      <h3 className="font-bold text-sm text-slate-900">
-                        {item.title || item.roomName}
-                      </h3>
-                      <span className="text-xs text-slate-500">
-                        Area: {item.roomName || " Bangunan Utama"}
-                      </span>
-                    </div>
-                    {item.mediaType === "PANORAMA_360" && (
-                      <PanoramaViewerModal
-                        imageUrl={item.fileUrl}
-                        title={item.title || "Panorama 360"}
-                      />
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ProjectMediaGallery media={project.media} />
           )}
         </section>
 
